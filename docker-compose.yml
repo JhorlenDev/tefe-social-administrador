@@ -1,0 +1,10 @@
+services:
+  web-administrador:
+    build:
+      context: .
+    container_name: web-administrador
+    restart: unless-stopped
+    ports:
+      - "3027:3027"
+    env_file:
+      - .env.local
