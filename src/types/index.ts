@@ -90,6 +90,7 @@ export interface DashboardStats {
   atualizados_hoje: number;
   cidadaos_por_status: { status_atualizacao: string; total: number }[];
   cidadaos_por_mes: { mes: string; total: number }[];
+  atualizacoes_por_mes?: { mes: string; total: number }[];
   beneficios_por_status: { status: string; total: number }[];
   cidadaos_por_genero?: { identidade_genero: string | null; total: number }[];
   atualizacao_por_bairro?: { bairro_label: string; total: number; atualizados: number; pendentes: number; desatualizados: number }[];

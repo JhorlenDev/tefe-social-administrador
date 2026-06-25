@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Activity, BadgeCheck, CalendarCheck2, ChevronDown, Gift, TrendingUp, User, UserMinus, UserRound, Users } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Activity, BadgeCheck, CalendarCheck2, ChevronDown, Gift, Loader2, Search, TrendingUp, User, UserMinus, UserRound, Users } from "lucide-react"
 import {
-  Bar,
-  BarChart,
+  Area,
+  AreaChart,
   CartesianGrid,
   Cell,
   Pie,
@@ -17,8 +18,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
-import { fetchDashboardStats, hasCachedKey } from "@/lib/api"
-import type { DashboardStats } from "@/types"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { fetchCidadaos, fetchDashboardStats, hasCachedKey } from "@/lib/api"
+import type { Cidadao, DashboardStats } from "@/types"
 import { toast } from "sonner"
 
 const STATUS_META = {
@@ -29,6 +32,33 @@ const STATUS_META = {
 
 function formatNumber(value: number) {
   return Number(value || 0).toLocaleString("pt-BR")
+}
+
+// Replica o bairro_label do backend (stats): primeiro não-vazio entre
+// bairro, comunidade/localidade e distrito; senão "Não informado".
+function bairroLabelDe(c: Cidadao) {
+  const e = c.endereco
+  return (
+    e?.bairro?.trim() ||
+    e?.comunidade_localidade?.trim() ||
+    e?.distrito?.trim() ||
+    "Não informado"
+  )
+}
+
+// Resumo de endereço para a listagem do modal:
+// Zona | Bairro (urbano) ou Comunidade/Distrito (rural) | Logradouro | Nº
+function enderecoResumo(c: Cidadao): string {
+  const e = c.endereco
+  if (!e) return "Sem endereço"
+  const rural = (e.tipo_localizacao ?? "").startsWith("RURAL")
+  const partes = [
+    `Zona: ${rural ? "Rural/Distrito" : "Urbano"}`,
+    rural ? e.comunidade_localidade?.trim() || e.distrito?.trim() : e.bairro?.trim(),
+    e.logradouro?.trim(),
+    e.numero?.trim() ? `Nº ${e.numero.trim()}` : "",
+  ].filter(Boolean)
+  return partes.join(" | ")
 }
 
 function formatMonthLabel(mes: string) {
@@ -111,10 +141,51 @@ function DashboardSkeleton() {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(() => !hasCachedKey("dashboard:stats"))
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [bairroSelecionado, setBairroSelecionado] = useState<string>("")
   const [bairroOpen, setBairroOpen] = useState(false)
+
+  // Modal de lista de cidadãos (ao clicar numa fatia/card dos gráficos).
+  // Filtra por status e/ou bairro — o backend só filtra status, então o
+  // bairro é casado no cliente replicando o bairro_label das stats.
+  const [modalAberto, setModalAberto] = useState(false)
+  const [modalTitulo, setModalTitulo] = useState("")
+  const [modalCor, setModalCor] = useState<string | null>(null)
+  const [modalCidadaos, setModalCidadaos] = useState<Cidadao[]>([])
+  const [modalLoading, setModalLoading] = useState(false)
+  const [modalBusca, setModalBusca] = useState("")
+
+  async function abrirModal(opts: { status?: string; bairro?: string; titulo: string; cor?: string | null }) {
+    setModalTitulo(opts.titulo)
+    setModalCor(opts.cor ?? null)
+    setModalAberto(true)
+    setModalBusca("")
+    setModalCidadaos([])
+    setModalLoading(true)
+    try {
+      const params: Record<string, string> = { page_size: "10000" }
+      if (opts.status) params.status_atualizacao = opts.status
+      const result = await fetchCidadaos(params)
+      const lista = opts.bairro
+        ? result.results.filter((c) => bairroLabelDe(c) === opts.bairro)
+        : result.results
+      setModalCidadaos(lista)
+    } catch {
+      toast.error("Erro ao carregar cidadãos")
+    } finally {
+      setModalLoading(false)
+    }
+  }
+
+  const modalFiltrados = useMemo(() => {
+    const termo = modalBusca.trim().toLowerCase()
+    if (!termo) return modalCidadaos
+    return modalCidadaos.filter((c) =>
+      c.nome.toLowerCase().includes(termo) || (c.nis ?? "").toLowerCase().includes(termo),
+    )
+  }, [modalCidadaos, modalBusca])
 
   useEffect(() => {
     let active = true
@@ -150,13 +221,20 @@ export default function DashboardPage() {
   }, [stats])
 
   const monthlyData = useMemo(() => {
-    return (stats?.cidadaos_por_mes ?? [])
+    // Atualizações por mês (por atualizado_em). Mantém fallback para
+    // cidadaos_por_mes enquanto o backend novo não está no ar.
+    return (stats?.atualizacoes_por_mes ?? stats?.cidadaos_por_mes ?? [])
       .slice(-12)
       .map((item) => ({
         mes: formatMonthLabel(item.mes),
         total: item.total,
       }))
   }, [stats])
+
+  const totalAtualizacoesMes = useMemo(
+    () => monthlyData.reduce((soma, item) => soma + item.total, 0),
+    [monthlyData],
+  )
 
   const bairroData = useMemo(() => {
     return (stats?.atualizacao_por_bairro ?? [])
@@ -179,9 +257,9 @@ export default function DashboardPage() {
   const donutBairro = useMemo(() => {
     if (!bairroAtual) return []
     return [
-      { name: "Atualizados", value: bairroAtual.atualizados, color: STATUS_META.ATUALIZADO.color, key: "at" },
-      { name: "Pendentes", value: bairroAtual.pendentes, color: STATUS_META.PENDENTE.color, key: "pe" },
-      { name: "Desatualizados", value: bairroAtual.desatualizados, color: STATUS_META.DESATUALIZADO.color, key: "de" },
+      { name: "Atualizados", value: bairroAtual.atualizados, color: STATUS_META.ATUALIZADO.color, key: "at", status: "ATUALIZADO" },
+      { name: "Pendentes", value: bairroAtual.pendentes, color: STATUS_META.PENDENTE.color, key: "pe", status: "PENDENTE" },
+      { name: "Desatualizados", value: bairroAtual.desatualizados, color: STATUS_META.DESATUALIZADO.color, key: "de", status: "DESATUALIZADO" },
     ].filter((d) => d.value > 0)
   }, [bairroAtual])
 
@@ -321,7 +399,7 @@ export default function DashboardPage() {
                 Nenhum dado disponível
               </div>
             ) : (
-              <div className="flex flex-col items-center">
+              <div className="grid items-center gap-6 md:grid-cols-2">
                 <ResponsiveContainer width="100%" height={280}>
                   <PieChart>
                     <Pie
@@ -336,6 +414,11 @@ export default function DashboardPage() {
                       stroke="var(--background)"
                       animationBegin={100}
                       animationDuration={900}
+                      className="cursor-pointer outline-none"
+                      onClick={(_, index) => {
+                        const entry = pieData[index]
+                        abrirModal({ status: entry.key, titulo: `Cidadãos — ${entry.name}`, cor: entry.color })
+                      }}
                     >
                       {pieData.map((entry) => (
                         <Cell key={entry.key} fill={entry.color} />
@@ -350,18 +433,26 @@ export default function DashboardPage() {
                     </text>
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="mt-2 grid w-full grid-cols-3 gap-3">
+                <div className="space-y-3">
                   {pieData.map((entry) => {
                     const pct = stats.total_cidadaos ? Math.round((entry.value / stats.total_cidadaos) * 100) : 0
                     return (
-                      <div key={entry.key} className="flex flex-col items-center rounded-xl border bg-card/50 px-3 py-2.5">
-                        <div className="flex items-center gap-1.5 text-sm font-medium">
+                      <button
+                        key={entry.key}
+                        type="button"
+                        onClick={() => abrirModal({ status: entry.key, titulo: `Cidadãos — ${entry.name}`, cor: entry.color })}
+                        className="flex w-full items-center justify-between gap-2 rounded-xl border bg-card/50 px-3 py-2.5 text-left transition-colors hover:bg-muted/60 hover:ring-1 hover:ring-inset hover:ring-foreground/15"
+                        title={`Ver ${entry.name.toLowerCase()}s`}
+                      >
+                        <div className="flex items-center gap-2 text-sm font-medium">
                           <div className="h-2.5 w-2.5 rounded-full shadow-sm" style={{ backgroundColor: entry.color }} />
                           <span className="text-muted-foreground">{entry.name}</span>
                         </div>
-                        <span className="mt-0.5 text-lg font-bold">{formatNumber(entry.value)}</span>
-                        <span className="text-xs text-muted-foreground">{pct}%</span>
-                      </div>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-lg font-bold">{formatNumber(entry.value)}</span>
+                          <span className="text-xs text-muted-foreground">{pct}%</span>
+                        </div>
+                      </button>
                     )
                   })}
                 </div>
@@ -374,10 +465,10 @@ export default function DashboardPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-primary" />
-              Cadastros por Mês
+              Atualizados por Mês
             </CardTitle>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {formatNumber(stats.total_cidadaos)} registros no total
+              {formatNumber(totalAtualizacoesMes)} atualizações no período
             </p>
           </CardHeader>
           <CardContent>
@@ -387,19 +478,29 @@ export default function DashboardPage() {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={monthlyData}>
+                <AreaChart data={monthlyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
-                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.35} />
+                    <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted/20" vertical={false} />
                   <XAxis dataKey="mes" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} dy={6} />
                   <YAxis tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} dx={-4} />
-                  <ReTooltip content={<ChartTooltip />} cursor={{ fill: "var(--muted)", opacity: 0.3 }} />
-                  <Bar dataKey="total" fill="url(#barGradient)" radius={[6, 6, 0, 0]} animationBegin={200} animationDuration={900} maxBarSize={48} />
-                </BarChart>
+                  <ReTooltip content={<ChartTooltip />} cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.3 }} />
+                  <Area
+                    type="monotone"
+                    dataKey="total"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    fill="url(#areaGradient)"
+                    dot={{ r: 3, fill: "#3b82f6", strokeWidth: 0 }}
+                    activeDot={{ r: 5 }}
+                    animationBegin={200}
+                    animationDuration={900}
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             )}
           </CardContent>
@@ -476,6 +577,11 @@ export default function DashboardPage() {
                       strokeWidth={2}
                       stroke="var(--background)"
                       animationDuration={700}
+                      className="cursor-pointer outline-none"
+                      onClick={(_, index) => {
+                        const entry = donutBairro[index]
+                        abrirModal({ status: entry.status, bairro: bairroAtual.bairro, titulo: `${bairroAtual.bairro} — ${entry.name}`, cor: entry.color })
+                      }}
                     >
                       {donutBairro.map((entry) => (
                         <Cell key={entry.key} fill={entry.color} />
@@ -497,28 +603,99 @@ export default function DashboardPage() {
                   <p className="text-lg font-semibold">{bairroAtual.bairro}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border bg-card/50 px-3 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => abrirModal({ bairro: bairroAtual.bairro, titulo: `${bairroAtual.bairro} — Todos` })}
+                    className="rounded-xl border bg-card/50 px-3 py-2.5 text-left transition-colors hover:bg-muted/60 hover:ring-1 hover:ring-inset hover:ring-foreground/15"
+                  >
                     <p className="text-xs text-muted-foreground">Total</p>
                     <p className="mt-0.5 text-lg font-bold">{formatNumber(bairroAtual.total)}</p>
-                  </div>
-                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => abrirModal({ status: "ATUALIZADO", bairro: bairroAtual.bairro, titulo: `${bairroAtual.bairro} — Atualizados`, cor: STATUS_META.ATUALIZADO.color })}
+                    className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5 text-left transition-colors hover:bg-emerald-500/10 hover:ring-1 hover:ring-inset hover:ring-emerald-500/30"
+                  >
                     <p className="text-xs text-muted-foreground">Atualizados</p>
                     <p className="mt-0.5 text-lg font-bold text-emerald-600 dark:text-emerald-400">{formatNumber(bairroAtual.atualizados)}</p>
-                  </div>
-                  <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-3 py-2.5">
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => abrirModal({ status: "PENDENTE", bairro: bairroAtual.bairro, titulo: `${bairroAtual.bairro} — Pendentes`, cor: STATUS_META.PENDENTE.color })}
+                    className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-3 py-2.5 text-left transition-colors hover:bg-yellow-500/10 hover:ring-1 hover:ring-inset hover:ring-yellow-500/30"
+                  >
                     <p className="text-xs text-muted-foreground">Pendentes</p>
                     <p className="mt-0.5 text-lg font-bold text-yellow-600 dark:text-yellow-400">{formatNumber(bairroAtual.pendentes)}</p>
-                  </div>
-                  <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2.5">
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => abrirModal({ status: "DESATUALIZADO", bairro: bairroAtual.bairro, titulo: `${bairroAtual.bairro} — Desatualizados`, cor: STATUS_META.DESATUALIZADO.color })}
+                    className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2.5 text-left transition-colors hover:bg-rose-500/10 hover:ring-1 hover:ring-inset hover:ring-rose-500/30"
+                  >
                     <p className="text-xs text-muted-foreground">Desatualizados</p>
                     <p className="mt-0.5 text-lg font-bold text-rose-600 dark:text-rose-400">{formatNumber(bairroAtual.desatualizados)}</p>
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Modal: lista de cidadãos (status e/ou bairro), com buscador */}
+      <Dialog open={modalAberto} onOpenChange={(open) => { if (!open) setModalAberto(false) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {modalCor && (
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modalCor }} />
+              )}
+              {modalTitulo}
+              <span className="text-sm font-normal text-muted-foreground">
+                ({formatNumber(modalCidadaos.length)})
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              autoFocus
+              placeholder="Buscar por nome ou NIS…"
+              value={modalBusca}
+              onChange={(e) => setModalBusca(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <div className="max-h-[50vh] overflow-y-auto rounded-md border">
+            {modalLoading ? (
+              <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando…
+              </div>
+            ) : modalFiltrados.length === 0 ? (
+              <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                {modalCidadaos.length === 0 ? "Nenhum cidadão neste status." : "Nenhum resultado para a busca."}
+              </div>
+            ) : (
+              <ul className="divide-y">
+                {modalFiltrados.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => { setModalAberto(false); router.push(`/cidadaos/${c.id}`) }}
+                      className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-muted/60"
+                    >
+                      <span className="text-sm font-medium">{c.nome}</span>
+                      <span className="text-xs text-muted-foreground">{enderecoResumo(c)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
