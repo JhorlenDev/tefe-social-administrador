@@ -1,5 +1,15 @@
 import axios from "axios"
-import type { Cidadao, Beneficio, Beneficiario, PaginatedResponse } from "@/types"
+import type {
+  Cidadao,
+  Beneficio,
+  Beneficiario,
+  DashboardStats,
+  PaginatedResponse,
+  MapaCalorPonto,
+  MapaCalorResumo,
+  BeneficiarioPendente,
+  GeocodificacaoResultado,
+} from "@/types"
 
 const proxyUrl = typeof window !== "undefined" ? "/api/proxy" : (process.env.API_UPSTREAM || "http://localhost:8000") + "/api"
 const api = axios.create({ baseURL: proxyUrl })
@@ -90,6 +100,13 @@ export async function fetchCidadao(id: string): Promise<Cidadao> {
   })
 }
 
+export async function fetchDashboardStats(): Promise<DashboardStats> {
+  return cached<DashboardStats>("dashboard:stats", async () => {
+    const { data } = await api.get("/dashboard/stats/")
+    return data as DashboardStats
+  })
+}
+
 export async function deleteCidadao(id: string): Promise<void> {
   await api.delete(`/cidadaos/${id}/`)
   invalidateCache("cidadao")
@@ -169,6 +186,36 @@ export async function fetchAllBeneficios(): Promise<Beneficio[]> {
   })
 }
 
+// ---------- Mapa de calor / geocodificação ----------
+
+export async function fetchMapaCalor(params?: Record<string, string>): Promise<MapaCalorPonto[]> {
+  const { data } = await api.get("/relatorios/mapa-calor-beneficiarios/", { params })
+  return data as MapaCalorPonto[]
+}
+
+export async function fetchMapaCalorResumo(params?: Record<string, string>): Promise<MapaCalorResumo> {
+  const { data } = await api.get("/relatorios/mapa-calor-beneficiarios/resumo/", { params })
+  return data as MapaCalorResumo
+}
+
+export async function fetchBeneficiariosPendentes(): Promise<BeneficiarioPendente[]> {
+  const { data } = await api.get("/geocodificacao/beneficiarios/pendentes/")
+  return data as BeneficiarioPendente[]
+}
+
+export async function processarGeocodificacao(limit = 50): Promise<GeocodificacaoResultado> {
+  const { data } = await api.post("/geocodificacao/beneficiarios/processar/", { limit })
+  return data as GeocodificacaoResultado
+}
+
+export async function definirCoordenadaManual(
+  cidadaoId: string,
+  latitude: number,
+  longitude: number,
+): Promise<void> {
+  await api.post(`/geocodificacao/enderecos/${cidadaoId}/manual/`, { latitude, longitude })
+}
+
 let warmupStarted = false
 
 export function warmClientCache() {
@@ -179,8 +226,6 @@ export function warmClientCache() {
     fetchCidadaos({ page: "1", page_size: "20" }),
     fetchBeneficios({ page: "1" }),
     fetchBeneficiarios({ page: "1", page_size: "20" }),
-    fetchAllCidadaos(),
-    fetchAllBeneficios(),
-    fetchAllBeneficiarios(),
+    fetchDashboardStats(),
   ])
 }

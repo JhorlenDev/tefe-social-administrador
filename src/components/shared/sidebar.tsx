@@ -21,6 +21,8 @@ const links = [
   { href: "/beneficios", label: "Benefícios", icon: Gift },
   { href: "/beneficiarios", label: "Beneficiários", icon: BadgeCheck },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
+  // Temporariamente desativado:
+  // { href: "/mapa-de-calor", label: "Mapa de Calor", icon: MapPinned },
 ]
 
 interface SidebarProps {
@@ -38,7 +40,7 @@ export default function Sidebar({ collapsed }: SidebarProps) {
       )}
     >
       <div className={cn("flex items-center gap-3 px-4 h-16 border-b border-sidebar-border", collapsed ? "justify-center" : "justify-start")}> 
-        <Logo className={collapsed ? "w-12" : "w-32"} priority />
+        <Logo className={collapsed ? "w-9" : "w-24"} priority />
         {!collapsed && (
           <div>
             <p className="text-xs text-muted-foreground">Administrador</p>

@@ -63,7 +63,7 @@ export default function CidadaosPage() {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       void load()
-    }, 0)
+    }, 250)
 
     return () => window.clearTimeout(timeoutId)
   }, [load])

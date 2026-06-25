@@ -87,9 +87,57 @@ export interface DashboardStats {
   total_cidadaos: number;
   total_beneficios: number;
   total_beneficiarios: number;
+  atualizados_hoje: number;
   cidadaos_por_status: { status_atualizacao: string; total: number }[];
   cidadaos_por_mes: { mes: string; total: number }[];
   beneficios_por_status: { status: string; total: number }[];
+  cidadaos_por_genero?: { identidade_genero: string | null; total: number }[];
+  atualizacao_por_bairro?: { bairro_label: string; total: number; atualizados: number; pendentes: number; desatualizados: number }[];
+}
+
+export interface MapaCalorPonto {
+  id: string;
+  nome: string;
+  bairro: string;
+  rua: string;
+  numero: string;
+  latitude: number;
+  longitude: number;
+  beneficio: string;
+  status: string;
+  status_atualizacao: string;
+  precisao: string | null;
+  geocodificacao_status: string;
+  beneficios: string[];
+  zona: string;
+}
+
+export interface MapaCalorResumo {
+  total: number;
+  com_coordenada: number;
+  sem_coordenada: number;
+  maior_concentracao: { bairro: string; total: number } | null;
+  por_bairro: { bairro: string; total: number }[];
+  por_precisao: { precisao: string; total: number }[];
+}
+
+export interface BeneficiarioPendente {
+  id: string;
+  nome: string;
+  bairro: string;
+  rua: string;
+  numero: string;
+  endereco_geocodificado: string;
+  geocodificacao_status: string;
+  geocodificacao_erro: string;
+}
+
+export interface GeocodificacaoResultado {
+  processados: number;
+  sucesso: number;
+  nao_encontrado: number;
+  erro: number;
+  restantes: number;
 }
 
 export interface PaginatedResponse<T> {

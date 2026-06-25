@@ -128,3 +128,24 @@
     @apply font-sans;
   }
 }
+
+/* Botão "X" de fechar do InfoWindow do Google Maps.
+   O reset global de cor deixava o ícone (renderizado via mask-image num <span>)
+   sem cor visível — forçamos uma cor cinza legível e o hover. */
+.gm-style-iw button.gm-ui-hover-effect,
+.gm-style-iw-chr button.gm-ui-hover-effect {
+  opacity: 1 !important;
+  width: 28px !important;
+  height: 28px !important;
+}
+.gm-style-iw button.gm-ui-hover-effect > span,
+.gm-style-iw-chr button.gm-ui-hover-effect > span {
+  background-color: #4b5563 !important; /* slate-600 */
+  width: 16px !important;
+  height: 16px !important;
+  margin: 6px !important;
+}
+.gm-style-iw button.gm-ui-hover-effect:hover > span,
+.gm-style-iw-chr button.gm-ui-hover-effect:hover > span {
+  background-color: #111827 !important; /* gray-900 */
+}
