@@ -11,6 +11,7 @@ import {
   Gift,
   BadgeCheck,
   FileText,
+  MapPinned,
   LogOut,
 } from "lucide-react"
 import { signOut } from "next-auth/react"
@@ -21,8 +22,7 @@ const links = [
   { href: "/beneficios", label: "Benefícios", icon: Gift },
   { href: "/beneficiarios", label: "Beneficiários", icon: BadgeCheck },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
-  // Temporariamente desativado:
-  // { href: "/mapa-de-calor", label: "Mapa de Calor", icon: MapPinned },
+  { href: "/mapa-de-calor", label: "Mapa de Calor", icon: MapPinned },
 ]
 
 interface SidebarProps {
