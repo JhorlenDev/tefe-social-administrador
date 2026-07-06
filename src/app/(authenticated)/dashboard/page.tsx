@@ -20,8 +20,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { fetchCidadaos, fetchDashboardStats, hasCachedKey } from "@/lib/api"
-import type { Cidadao, DashboardStats } from "@/types"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
+import {
+  fetchAllBeneficios,
+  fetchCidadaos,
+  fetchDashboardStats,
+  hasCachedKey,
+} from "@/lib/api"
+import type { Beneficio, Cidadao, DashboardStats } from "@/types"
+import { BeneficioIcon } from "@/lib/beneficio-icons"
 import { toast } from "sonner"
 
 const STATUS_META = {
@@ -68,16 +75,25 @@ function formatMonthLabel(mes: string) {
   return `${monthNames[index] ?? m}/${ano}`
 }
 
-function ChartTooltip({ active, payload, label }: any) {
+type DashboardTooltipEntry = {
+  color?: string
+  value?: number
+  name?: string
+  payload?: {
+    color?: string
+  }
+}
+
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: DashboardTooltipEntry[]; label?: string }) {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded-xl border bg-card px-4 py-3 text-sm shadow-2xl">
       <p className="mb-1.5 font-medium text-muted-foreground">{label}</p>
-      {payload.map((entry: any, i: number) => (
+      {payload.map((entry, i) => (
         <div key={i} className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
           <span className="font-bold" style={{ color: entry.color }}>
-            {formatNumber(entry.value)}
+            {formatNumber(entry.value ?? 0)}
           </span>
         </div>
       ))}
@@ -85,16 +101,16 @@ function ChartTooltip({ active, payload, label }: any) {
   )
 }
 
-function PieTooltip({ active, payload }: any) {
+function PieTooltip({ active, payload }: { active?: boolean; payload?: DashboardTooltipEntry[] }) {
   if (!active || !payload?.length) return null
   const entry = payload[0]
   return (
     <div className="rounded-xl border bg-card px-4 py-3 text-sm shadow-2xl">
       <div className="flex items-center gap-2">
-        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.payload.color }} />
+        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: entry.payload?.color }} />
         <span className="font-medium">{entry.name}</span>
       </div>
-      <p className="mt-1 font-bold">{formatNumber(entry.value)} cidadão(s)</p>
+      <p className="mt-1 font-bold">{formatNumber(entry.value ?? 0)} cidadão(s)</p>
     </div>
   )
 }
@@ -144,12 +160,14 @@ export default function DashboardPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(() => !hasCachedKey("dashboard:stats"))
   const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [beneficios, setBeneficios] = useState<Beneficio[]>([])
+  const [beneficioId, setBeneficioId] = useState("todos")
   const [bairroSelecionado, setBairroSelecionado] = useState<string>("")
   const [bairroOpen, setBairroOpen] = useState(false)
 
   // Modal de lista de cidadãos (ao clicar numa fatia/card dos gráficos).
-  // Filtra por status e/ou bairro — o backend só filtra status, então o
-  // bairro é casado no cliente replicando o bairro_label das stats.
+  // Usa o mesmo recorte de benefício do dashboard; bairro é casado no cliente
+  // replicando o bairro_label das stats.
   const [modalAberto, setModalAberto] = useState(false)
   const [modalTitulo, setModalTitulo] = useState("")
   const [modalCor, setModalCor] = useState<string | null>(null)
@@ -167,10 +185,10 @@ export default function DashboardPage() {
     try {
       const params: Record<string, string> = { page_size: "10000" }
       if (opts.status) params.status_atualizacao = opts.status
-      const result = await fetchCidadaos(params)
-      const lista = opts.bairro
-        ? result.results.filter((c) => bairroLabelDe(c) === opts.bairro)
-        : result.results
+      if (beneficioId === "sem_beneficio") params.sem_beneficio = "true"
+      else if (beneficioId !== "todos") params.beneficio_id = beneficioId
+      const origem = (await fetchCidadaos(params)).results
+      const lista = opts.bairro ? origem.filter((c) => bairroLabelDe(c) === opts.bairro) : origem
       setModalCidadaos(lista)
     } catch {
       toast.error("Erro ao carregar cidadãos")
@@ -189,10 +207,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let active = true
+    const params: Record<string, string> = {}
+    if (beneficioId === "sem_beneficio") params.sem_beneficio = "true"
+    else if (beneficioId !== "todos") params.beneficio_id = beneficioId
 
-    fetchDashboardStats()
-      .then((data) => {
-        if (active) setStats(data)
+    setLoading(true)
+    fetchDashboardStats(params)
+      .then((statsData) => {
+        if (active) setStats(statsData)
       })
       .catch(() => {
         if (active) toast.error("Erro ao carregar dashboard")
@@ -204,10 +226,28 @@ export default function DashboardPage() {
     return () => {
       active = false
     }
+  }, [beneficioId])
+
+  useEffect(() => {
+    let active = true
+
+    fetchAllBeneficios()
+      .then((beneficiosData) => {
+        if (active) setBeneficios(beneficiosData)
+      })
+      .catch(() => {
+        if (active) toast.error("Erro ao carregar benefícios")
+      })
+
+    return () => {
+      active = false
+    }
   }, [])
 
+  const statsVisiveis = stats
+
   const pieData = useMemo(() => {
-    return (stats?.cidadaos_por_status ?? [])
+    return (statsVisiveis?.cidadaos_por_status ?? [])
       .map((item) => {
         const meta = STATUS_META[item.status_atualizacao as keyof typeof STATUS_META]
         return {
@@ -218,18 +258,18 @@ export default function DashboardPage() {
         }
       })
       .filter((item) => item.value > 0)
-  }, [stats])
+  }, [statsVisiveis])
 
   const monthlyData = useMemo(() => {
     // Atualizações por mês (por atualizado_em). Mantém fallback para
     // cidadaos_por_mes enquanto o backend novo não está no ar.
-    return (stats?.atualizacoes_por_mes ?? stats?.cidadaos_por_mes ?? [])
+    return (statsVisiveis?.atualizacoes_por_mes ?? statsVisiveis?.cidadaos_por_mes ?? [])
       .slice(-12)
       .map((item) => ({
         mes: formatMonthLabel(item.mes),
         total: item.total,
       }))
-  }, [stats])
+  }, [statsVisiveis])
 
   const totalAtualizacoesMes = useMemo(
     () => monthlyData.reduce((soma, item) => soma + item.total, 0),
@@ -237,7 +277,7 @@ export default function DashboardPage() {
   )
 
   const bairroData = useMemo(() => {
-    return (stats?.atualizacao_por_bairro ?? [])
+    return (statsVisiveis?.atualizacao_por_bairro ?? [])
       .filter((item) => item.total > 0)
       .map((item) => ({
         bairro: item.bairro_label,
@@ -247,7 +287,7 @@ export default function DashboardPage() {
         desatualizados: item.desatualizados,
         taxa: Math.round((item.atualizados / item.total) * 100),
       }))
-  }, [stats])
+  }, [statsVisiveis])
 
   const bairroAtual = useMemo(
     () => bairroData.find((b) => b.bairro === bairroSelecionado) ?? bairroData[0] ?? null,
@@ -265,7 +305,7 @@ export default function DashboardPage() {
 
   if (loading) return <DashboardSkeleton />
 
-  if (!stats) {
+  if (!statsVisiveis) {
     return (
       <div className="flex min-h-[320px] items-center justify-center rounded-lg border bg-card text-sm text-muted-foreground">
         Não foi possível carregar os dados do dashboard.
@@ -273,10 +313,10 @@ export default function DashboardPage() {
     )
   }
 
-  const atualizados = stats.cidadaos_por_status.find((item) => item.status_atualizacao === "ATUALIZADO")?.total ?? 0
-  const taxa = stats.total_cidadaos ? Math.round((atualizados / stats.total_cidadaos) * 100) : 0
+  const atualizados = statsVisiveis.cidadaos_por_status.find((item) => item.status_atualizacao === "ATUALIZADO")?.total ?? 0
+  const taxa = statsVisiveis.total_cidadaos ? Math.round((atualizados / statsVisiveis.total_cidadaos) * 100) : 0
   const VALORES_NAO_INFORMADO = ["", "-", "--", "NAO INFORMADO", "NAO_INFORMADO", "N/I", "NI", "NULL", "NONE"]
-  const generoTotais = (stats.cidadaos_por_genero ?? []).reduce(
+  const generoTotais = (statsVisiveis.cidadaos_por_genero ?? []).reduce(
     (acc, item) => {
       const valor = (item.identidade_genero ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim()
       if (VALORES_NAO_INFORMADO.includes(valor)) acc.naoInformado += item.total
@@ -288,10 +328,16 @@ export default function DashboardPage() {
     { homens: 0, mulheres: 0, outros: 0, naoInformado: 0 },
   )
 
+  const beneficioSelecionado = beneficios.find((beneficio) => String(beneficio.id) === beneficioId)
+  const filtrandoBeneficio = beneficioId !== "todos" && beneficioId !== "sem_beneficio"
+  const filtrandoSemBeneficio = beneficioId === "sem_beneficio"
+  const nomeBeneficioSelecionado = beneficioSelecionado?.nome ?? "Selecionado"
+
   const cards = [
     {
-      title: "Total de Cidadãos",
-      value: formatNumber(stats.total_cidadaos),
+      title: filtrandoSemBeneficio ? "Sem benefício" : filtrandoBeneficio ? "Vinculados ao benefício" : "Total de cidadãos",
+      value: formatNumber(statsVisiveis.total_cidadaos),
+      subtitle: filtrandoBeneficio ? nomeBeneficioSelecionado : filtrandoSemBeneficio ? "cidadãos sem vínculo ativo" : "cidadãos cadastrados",
       icon: Users,
       gradient: "from-blue-500 to-blue-600",
       iconBg: "bg-blue-100 dark:bg-blue-900/30",
@@ -299,7 +345,7 @@ export default function DashboardPage() {
     },
     {
       title: "Atualizados Hoje",
-      value: formatNumber(stats.atualizados_hoje),
+      value: formatNumber(statsVisiveis.atualizados_hoje),
       subtitle: "cadastros movimentados hoje",
       icon: CalendarCheck2,
       gradient: "from-cyan-500 to-emerald-500",
@@ -307,16 +353,19 @@ export default function DashboardPage() {
       iconColor: "text-cyan-600 dark:text-cyan-400",
     },
     {
-      title: "Benefícios",
-      value: formatNumber(stats.total_beneficios),
+      title: filtrandoBeneficio ? "Benefício" : "Benefícios",
+      value: filtrandoBeneficio ? nomeBeneficioSelecionado : formatNumber(statsVisiveis.total_beneficios),
+      subtitle: filtrandoBeneficio ? "recorte selecionado" : filtrandoSemBeneficio ? "sem vínculo" : "benefícios cadastrados",
+      valueClassName: filtrandoBeneficio ? "text-base leading-snug" : undefined,
       icon: Gift,
       gradient: "from-emerald-500 to-emerald-600",
       iconBg: "bg-emerald-100 dark:bg-emerald-900/30",
       iconColor: "text-emerald-600 dark:text-emerald-400",
     },
     {
-      title: "Beneficiários",
-      value: formatNumber(stats.total_beneficiarios),
+      title: filtrandoBeneficio ? "Neste benefício" : "Vinculados a benefícios",
+      value: formatNumber(statsVisiveis.total_beneficiarios),
+      subtitle: filtrandoSemBeneficio ? "nenhum vínculo" : "cidadãos com benefício",
       icon: BadgeCheck,
       gradient: "from-violet-500 to-violet-600",
       iconBg: "bg-violet-100 dark:bg-violet-900/30",
@@ -325,7 +374,7 @@ export default function DashboardPage() {
     {
       title: "Taxa de Atualização",
       value: `${taxa}%`,
-      subtitle: `${formatNumber(atualizados)} de ${formatNumber(stats.total_cidadaos)} atualizados`,
+      subtitle: `${formatNumber(atualizados)} de ${formatNumber(statsVisiveis.total_cidadaos)} atualizados`,
       icon: TrendingUp,
       gradient: taxa > 50 ? "from-emerald-500 to-emerald-600" : "from-amber-500 to-amber-600",
       iconBg: "bg-amber-100 dark:bg-amber-900/30",
@@ -342,13 +391,52 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-          <Activity className="h-5 w-5 text-primary" />
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+            <Activity className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-sm text-muted-foreground">Visão geral do Tefé Social</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Visão geral do Tefé Social</p>
+
+        <div className="grid gap-1.5 sm:w-72">
+            <label className="grid gap-1.5 text-sm font-medium">
+              Benefício
+              <Select
+                value={beneficioId}
+                onValueChange={(value) => {
+                  const nextValue = value ?? "todos"
+                  setBeneficioId(nextValue)
+                  setBairroSelecionado("")
+                }}
+              >
+                <SelectTrigger className="h-10 w-full justify-between">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <BeneficioIcon value={beneficioSelecionado?.icone} className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">
+                      {beneficioId === "todos"
+                        ? "Todos os cidadãos"
+                        : beneficioId === "sem_beneficio"
+                          ? "Sem benefício"
+                          : beneficioSelecionado?.nome ?? "Benefício"}
+                    </span>
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os cidadãos</SelectItem>
+                  <SelectItem value="sem_beneficio">Sem benefício</SelectItem>
+                  {beneficios.map((beneficio) => (
+                    <SelectItem key={beneficio.id} value={beneficio.id}>
+                      <BeneficioIcon value={beneficio.icone} className="h-4 w-4 text-muted-foreground" />
+                      {beneficio.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
         </div>
       </div>
 
@@ -363,7 +451,7 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent className="relative">
-              <p className="text-2xl font-semibold tracking-tight">{card.value}</p>
+              <p className={`text-2xl font-semibold tracking-tight ${card.valueClassName ?? ""}`}>{card.value}</p>
               {"subtitle" in card && card.subtitle && <p className="mt-1 text-xs text-muted-foreground">{card.subtitle}</p>}
             </CardContent>
           </Card>
@@ -426,7 +514,7 @@ export default function DashboardPage() {
                     </Pie>
                     <ReTooltip content={<PieTooltip />} />
                     <text x="50%" y="46%" textAnchor="middle" className="fill-foreground" style={{ fontSize: 30, fontWeight: 800 }}>
-                      {formatNumber(stats.total_cidadaos)}
+                      {formatNumber(statsVisiveis.total_cidadaos)}
                     </text>
                     <text x="50%" y="57%" textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 12 }}>
                       cidadãos
@@ -435,7 +523,7 @@ export default function DashboardPage() {
                 </ResponsiveContainer>
                 <div className="space-y-3">
                   {pieData.map((entry) => {
-                    const pct = stats.total_cidadaos ? Math.round((entry.value / stats.total_cidadaos) * 100) : 0
+                    const pct = statsVisiveis.total_cidadaos ? Math.round((entry.value / statsVisiveis.total_cidadaos) * 100) : 0
                     return (
                       <button
                         key={entry.key}

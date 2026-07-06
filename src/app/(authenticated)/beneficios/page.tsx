@@ -15,8 +15,9 @@ import {
 import { fetchBeneficios, deleteBeneficio, hasCachedData } from "@/lib/api"
 import type { Beneficio, PaginatedResponse } from "@/types"
 import { format } from "date-fns"
-import { MoreHorizontal, Eye, Plus, Pencil, Trash2 } from "lucide-react"
+import { MoreHorizontal, Plus, Pencil, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { BeneficioIcon, getBeneficioIconOption } from "@/lib/beneficio-icons"
 
 export default function BeneficiosPage() {
   const router = useRouter()
@@ -50,8 +51,16 @@ export default function BeneficiosPage() {
 
   const columns: ColumnDef<Beneficio>[] = [
     { accessorKey: "nome", header: "Nome", cell: ({ row }) => (
-      <button className="font-medium text-primary hover:underline text-left" onClick={() => router.push(`/beneficios/${row.original.id}`)}>
-        {row.original.nome}
+      <button className="flex items-center gap-2 text-left font-medium text-primary hover:underline" onClick={() => router.push(`/beneficios/${row.original.id}`)}>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <BeneficioIcon value={row.original.icone} className="h-4 w-4" />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate">{row.original.nome}</span>
+          <span className="block text-xs font-normal text-muted-foreground">
+            {getBeneficioIconOption(row.original.icone).label}
+          </span>
+        </span>
       </button>
     )},
     { accessorKey: "descricao", header: "Descrição", cell: ({ row }) => row.original.descricao?.slice(0, 80) + (row.original.descricao?.length > 80 ? "..." : "") || "-" },

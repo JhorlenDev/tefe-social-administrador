@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { createBeneficio } from "@/lib/api"
+import { BENEFICIO_ICON_DEFAULT, BENEFICIO_ICON_OPTIONS, BeneficioIcon, getBeneficioIconOption } from "@/lib/beneficio-icons"
 import { ArrowLeft, Save } from "lucide-react"
 import { toast } from "sonner"
 
@@ -15,13 +17,14 @@ export default function NovoBeneficioPage() {
   const router = useRouter()
   const [nome, setNome] = useState("")
   const [descricao, setDescricao] = useState("")
+  const [icone, setIcone] = useState(BENEFICIO_ICON_DEFAULT)
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
     if (!nome.trim()) { toast.error("Nome é obrigatório"); return }
     setSaving(true)
     try {
-      await createBeneficio({ nome: nome.trim(), descricao: descricao.trim() })
+      await createBeneficio({ nome: nome.trim(), descricao: descricao.trim(), icone })
       toast.success("Benefício criado com sucesso")
       router.push("/beneficios")
     } catch { toast.error("Erro ao criar benefício") }
@@ -47,6 +50,25 @@ export default function NovoBeneficioPage() {
           <div className="space-y-2">
             <Label htmlFor="descricao">Descrição</Label>
             <Textarea id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Descrição do benefício" rows={4} />
+          </div>
+          <div className="space-y-2">
+            <Label>Ícone</Label>
+            <Select value={icone} onValueChange={(value) => setIcone(value ?? BENEFICIO_ICON_DEFAULT)}>
+              <SelectTrigger className="h-10 w-full justify-between">
+                <span className="flex items-center gap-2">
+                  <BeneficioIcon value={icone} className="h-4 w-4 text-muted-foreground" />
+                  {getBeneficioIconOption(icone).label}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {BENEFICIO_ICON_OPTIONS.map((option) => (
+                  <SelectItem key={option.key} value={option.key}>
+                    <option.icon className="h-4 w-4 text-muted-foreground" />
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex gap-2 pt-2">
             <Button onClick={handleSave} disabled={saving}>

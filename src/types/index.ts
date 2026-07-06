@@ -40,6 +40,8 @@ export interface Endereco {
   complemento?: string | null;
   tipo_localizacao?: string | null;
   situacao_imovel?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
 }
 
 export interface FamiliaMembro {
@@ -64,6 +66,7 @@ export interface Beneficio {
   id: string;
   nome: string;
   descricao: string;
+  icone?: string;
   ativo: boolean;
   criado_em: string;
   atualizado_em: string;
@@ -120,6 +123,18 @@ export interface MapaCalorResumo {
   maior_concentracao: { bairro: string; total: number } | null;
   por_bairro: { bairro: string; total: number }[];
   por_precisao: { precisao: string; total: number }[];
+}
+
+export interface LocalidadeBeneficiario {
+  id: string;
+  nome: string;
+  latitude: number | null;
+  longitude: number | null;
+  fonte: string;
+  total_beneficiarios: number;
+  google_formatted: string;
+  google_partial: boolean;
+  dentro_de_tefe: boolean;
 }
 
 export interface BeneficiarioPendente {

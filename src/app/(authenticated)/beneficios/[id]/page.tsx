@@ -8,9 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fetchBeneficio, updateBeneficio } from "@/lib/api"
 import type { Beneficio } from "@/types"
+import { BENEFICIO_ICON_DEFAULT, BENEFICIO_ICON_OPTIONS, BeneficioIcon, getBeneficioIconOption } from "@/lib/beneficio-icons"
 import { ArrowLeft, Save } from "lucide-react"
 import { toast } from "sonner"
 
@@ -21,6 +23,7 @@ export default function EditarBeneficioPage() {
   const [loading, setLoading] = useState(true)
   const [nome, setNome] = useState("")
   const [descricao, setDescricao] = useState("")
+  const [icone, setIcone] = useState(BENEFICIO_ICON_DEFAULT)
   const [ativo, setAtivo] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -30,6 +33,7 @@ export default function EditarBeneficioPage() {
         setBeneficio(b)
         setNome(b.nome)
         setDescricao(b.descricao)
+        setIcone(b.icone || BENEFICIO_ICON_DEFAULT)
         setAtivo(b.ativo)
       })
       .catch(() => toast.error("Erro ao carregar benefício"))
@@ -40,7 +44,7 @@ export default function EditarBeneficioPage() {
     if (!nome.trim()) { toast.error("Nome é obrigatório"); return }
     setSaving(true)
     try {
-      await updateBeneficio(params.id as string, { nome: nome.trim(), descricao: descricao.trim(), ativo })
+      await updateBeneficio(params.id as string, { nome: nome.trim(), descricao: descricao.trim(), icone, ativo })
       toast.success("Benefício atualizado")
       router.push("/beneficios")
     } catch { toast.error("Erro ao atualizar") }
@@ -75,6 +79,25 @@ export default function EditarBeneficioPage() {
           <div className="space-y-2">
             <Label htmlFor="descricao">Descrição</Label>
             <Textarea id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} />
+          </div>
+          <div className="space-y-2">
+            <Label>Ícone</Label>
+            <Select value={icone} onValueChange={(value) => setIcone(value ?? BENEFICIO_ICON_DEFAULT)}>
+              <SelectTrigger className="h-10 w-full justify-between">
+                <span className="flex items-center gap-2">
+                  <BeneficioIcon value={icone} className="h-4 w-4 text-muted-foreground" />
+                  {getBeneficioIconOption(icone).label}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {BENEFICIO_ICON_OPTIONS.map((option) => (
+                  <SelectItem key={option.key} value={option.key}>
+                    <option.icon className="h-4 w-4 text-muted-foreground" />
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center gap-2">
             <Switch id="ativo" checked={ativo} onCheckedChange={setAtivo} />

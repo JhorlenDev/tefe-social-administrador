@@ -13,7 +13,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ detail: "Sessão inválida" }, { status: 401 })
   }
 
-  const pathStr = path.join("/")
+  // O backend (DRF, APPEND_SLASH) exige barra no fim. O catch-all do Next
+  // remove a barra final, o que quebra POST/PATCH/DELETE (500). Reforçamos aqui.
+  const pathStr = path.join("/").replace(/\/+$/, "") + "/"
   const url = `${UPSTREAM}${API_PATH}/${pathStr}${request.nextUrl.search}`
   console.log(`[proxy] ${request.method} ${url}`)
 
@@ -43,7 +45,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ detail: "Sessão inválida" }, { status: 401 })
   }
 
-  const pathStr = path.join("/")
+  // O backend (DRF, APPEND_SLASH) exige barra no fim. O catch-all do Next
+  // remove a barra final, o que quebra POST/PATCH/DELETE (500). Reforçamos aqui.
+  const pathStr = path.join("/").replace(/\/+$/, "") + "/"
   const url = `${UPSTREAM}${API_PATH}/${pathStr}${request.nextUrl.search}`
   console.log(`[proxy] ${request.method} ${url}`)
 
@@ -77,7 +81,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ detail: "Sessão inválida" }, { status: 401 })
   }
 
-  const pathStr = path.join("/")
+  // O backend (DRF, APPEND_SLASH) exige barra no fim. O catch-all do Next
+  // remove a barra final, o que quebra POST/PATCH/DELETE (500). Reforçamos aqui.
+  const pathStr = path.join("/").replace(/\/+$/, "") + "/"
   const url = `${UPSTREAM}${API_PATH}/${pathStr}${request.nextUrl.search}`
 
   const bodyText = await request.text()
@@ -109,7 +115,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     return NextResponse.json({ detail: "Sessão inválida" }, { status: 401 })
   }
 
-  const pathStr = path.join("/")
+  // O backend (DRF, APPEND_SLASH) exige barra no fim. O catch-all do Next
+  // remove a barra final, o que quebra POST/PATCH/DELETE (500). Reforçamos aqui.
+  const pathStr = path.join("/").replace(/\/+$/, "") + "/"
   const url = `${UPSTREAM}${API_PATH}/${pathStr}${request.nextUrl.search}`
 
   const headers: Record<string, string> = {}

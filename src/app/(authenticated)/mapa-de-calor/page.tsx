@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -59,10 +60,11 @@ const PRECISAO_OPCOES = [
 ]
 
 // Mesmas cores dos pinos do mapa (ver mapa-google.tsx).
+// Atualizado = verde · Pendente = amarelo · Desatualizado = vermelho.
 const STATUS_ATUALIZACAO_META = [
   { key: "ATUALIZADO", label: "Atualizados", cor: "#22c55e", classe: "text-emerald-600" },
-  { key: "PENDENTE", label: "Pendentes", cor: "#ef4444", classe: "text-red-600" },
-  { key: "DESATUALIZADO", label: "Desatualizados", cor: "#9ca3af", classe: "text-gray-500" },
+  { key: "PENDENTE", label: "Pendentes", cor: "#eab308", classe: "text-yellow-600" },
+  { key: "DESATUALIZADO", label: "Desatualizados", cor: "#ef4444", classe: "text-red-600" },
 ] as const
 
 const selectClass = "h-10 rounded-md border bg-background px-3 text-sm font-normal"
@@ -281,16 +283,22 @@ export default function MapaDeCalorPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
           <MapPinned className="h-5 w-5 text-primary" />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">Mapa de Calor dos Beneficiários</h1>
           <p className="text-sm text-muted-foreground">
-            Concentração de beneficiários em Tefé/AM a partir das coordenadas geocodificadas.
+            Concentração de beneficiários em Tefé/AM a partir das coordenadas das localidades.
           </p>
         </div>
+        <Link href="/mapa-de-calor/localidades">
+          <Button variant="outline">
+            <MapPin className="mr-2 h-4 w-4" />
+            Coordenadas por localidade
+          </Button>
+        </Link>
       </div>
 
       {/* Cards de resumo */}

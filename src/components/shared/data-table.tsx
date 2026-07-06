@@ -22,6 +22,7 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   searchKey?: string
+  searchLabel?: string
   searchPlaceholder?: string
   pageSize?: number
   loading?: boolean
@@ -34,6 +35,7 @@ export default function DataTable<TData, TValue>({
   columns,
   data,
   searchKey,
+  searchLabel,
   searchPlaceholder = "Pesquisar...",
   pageSize = 10,
   loading,
@@ -60,24 +62,27 @@ export default function DataTable<TData, TValue>({
   return (
     <div className="space-y-4">
       {(searchKey || toolbarEnd) && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           {searchKey && (
-            <div className="relative w-full max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder={searchPlaceholder}
-                value={searchValue ?? ((table.getColumn(searchKey)?.getFilterValue() as string) || "")}
-                onChange={(e) => {
-                  if (onSearchChange) {
-                    onSearchChange(e.target.value)
-                    return
-                  }
+            <label className="grid w-full max-w-sm gap-1.5 text-sm font-medium">
+              {searchLabel}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder={searchPlaceholder}
+                  value={searchValue ?? ((table.getColumn(searchKey)?.getFilterValue() as string) || "")}
+                  onChange={(e) => {
+                    if (onSearchChange) {
+                      onSearchChange(e.target.value)
+                      return
+                    }
 
-                  table.getColumn(searchKey)?.setFilterValue(e.target.value)
-                }}
-                className="pl-9"
-              />
-            </div>
+                    table.getColumn(searchKey)?.setFilterValue(e.target.value)
+                  }}
+                  className="pl-9"
+                />
+              </div>
+            </label>
           )}
           {toolbarEnd}
         </div>

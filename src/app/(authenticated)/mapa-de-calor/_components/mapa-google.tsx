@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react"
 import { APIProvider, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps"
 import { GoogleMapsOverlay } from "@deck.gl/google-maps"
 import { HeatmapLayer } from "@deck.gl/aggregation-layers"
-import { ScatterplotLayer } from "@deck.gl/layers"
+import { IconLayer } from "@deck.gl/layers"
 import type { MapaCalorPonto } from "@/types"
 
 // Centro de Tefé/AM
@@ -19,18 +19,28 @@ const AMAZONAS_BOUNDS = {
   east: -55.8,
 }
 
-// Cor do ponto por status de atualização do cidadão (RGB para o deck.gl).
+// Cor do ponto por status de atualização do cidadão.
+// Atualizado = verde · Pendente = amarelo · Desatualizado = vermelho.
 const STATUS_ATUALIZACAO_RGB: Record<string, [number, number, number]> = {
   ATUALIZADO: [34, 197, 94], // verde
-  PENDENTE: [239, 68, 68], // vermelho
-  DESATUALIZADO: [156, 163, 175], // cinza
+  PENDENTE: [234, 179, 8], // amarelo
+  DESATUALIZADO: [239, 68, 68], // vermelho
 }
 
 const STATUS_ATUALIZACAO_COR: Record<string, string> = {
   ATUALIZADO: "#22c55e",
-  PENDENTE: "#ef4444",
-  DESATUALIZADO: "#9ca3af",
+  PENDENTE: "#eab308",
+  DESATUALIZADO: "#ef4444",
 }
+
+// Pino (gota) de mapa branco com furo central, usado como máscara: o deck.gl
+// tinge com a cor do status (getColor). Ancorado na ponta de baixo.
+const PIN_SVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="64" viewBox="0 0 48 64">` +
+  `<path fill="#fff" fill-rule="evenodd" d="M24 1C12.4 1 3 10.4 3 22c0 14.7 21 41 21 41s21-26.3 21-41C45 10.4 35.6 1 24 1zM24 13a9 9 0 100 18 9 9 0 000-18z"/>` +
+  `</svg>`
+const PIN_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG)}`
+const PIN_MAPPING = { pin: { x: 0, y: 0, width: 48, height: 64, anchorY: 64, mask: true } }
 
 const STATUS_ATUALIZACAO_LABEL: Record<string, string> = {
   ATUALIZADO: "Atualizado",
@@ -100,18 +110,18 @@ function Overlays({ pontos, modo, raio, intensidade, modoManual, onMapClick }: M
     const layers =
       modo === "pontos"
         ? [
-            new ScatterplotLayer<MapaCalorPonto>({
+            new IconLayer<MapaCalorPonto>({
               id: "pontos-beneficiarios",
               data: pontosValidos,
               getPosition: (d) => [d.longitude, d.latitude],
-              getFillColor: (d) => corRgbPorAtualizacao(d.status_atualizacao),
-              getLineColor: [255, 255, 255],
-              lineWidthMinPixels: 1.5,
-              stroked: true,
-              radiusUnits: "pixels",
-              getRadius: 7,
-              radiusMinPixels: 5,
-              radiusMaxPixels: 10,
+              iconAtlas: PIN_URL,
+              iconMapping: PIN_MAPPING,
+              getIcon: () => "pin",
+              getColor: (d) => corRgbPorAtualizacao(d.status_atualizacao),
+              getSize: 44,
+              sizeUnits: "pixels",
+              sizeMinPixels: 26,
+              sizeMaxPixels: 56,
               pickable: true,
               onClick: (pick) => {
                 const p = pick.object as MapaCalorPonto | undefined

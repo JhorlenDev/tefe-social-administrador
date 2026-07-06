@@ -9,6 +9,7 @@ import type {
   MapaCalorResumo,
   BeneficiarioPendente,
   GeocodificacaoResultado,
+  LocalidadeBeneficiario,
 } from "@/types"
 
 const proxyUrl = typeof window !== "undefined" ? "/api/proxy" : (process.env.API_UPSTREAM || "http://localhost:8000") + "/api"
@@ -100,11 +101,12 @@ export async function fetchCidadao(id: string): Promise<Cidadao> {
   })
 }
 
-export async function fetchDashboardStats(): Promise<DashboardStats> {
-  return cached<DashboardStats>("dashboard:stats", async () => {
-    const { data } = await api.get("/dashboard/stats/")
+export async function fetchDashboardStats(params?: Record<string, string>): Promise<DashboardStats> {
+  const cacheKey = makeCacheKey("dashboard:stats", params)
+  return cached<DashboardStats>(cacheKey, async () => {
+    const { data } = await api.get("/dashboard/stats/", { params })
     return data as DashboardStats
-  })
+  }, 0)
 }
 
 export async function deleteCidadao(id: string): Promise<void> {
@@ -164,7 +166,7 @@ export async function updateBeneficiarioStatus(id: string, status: string, valor
 
 export async function fetchAllCidadaos(): Promise<Cidadao[]> {
   return cached<Cidadao[]>("cidadaos:all", async () => {
-    const { data } = await api.get("/cidadaos/")
+    const { data } = await api.get("/cidadaos/", { params: { page_size: "10000" } })
     const p = toPaginated(data as Cidadao[])
     return p.results
   })
@@ -172,7 +174,7 @@ export async function fetchAllCidadaos(): Promise<Cidadao[]> {
 
 export async function fetchAllBeneficiarios(): Promise<Beneficiario[]> {
   return cached<Beneficiario[]>("beneficiarios:all", async () => {
-    const { data } = await api.get("/beneficiarios/")
+    const { data } = await api.get("/beneficiarios/", { params: { page_size: "10000" } })
     const p = toPaginated(data as Beneficiario[])
     return p.results
   })
@@ -180,7 +182,7 @@ export async function fetchAllBeneficiarios(): Promise<Beneficiario[]> {
 
 export async function fetchAllBeneficios(): Promise<Beneficio[]> {
   return cached<Beneficio[]>("beneficios:all", async () => {
-    const { data } = await api.get("/beneficios/")
+    const { data } = await api.get("/beneficios/", { params: { page_size: "10000" } })
     const p = toPaginated(data as Beneficio[])
     return p.results
   })
@@ -208,12 +210,47 @@ export async function processarGeocodificacao(limit = 50): Promise<Geocodificaca
   return data as GeocodificacaoResultado
 }
 
+export async function fetchLocalidades(): Promise<LocalidadeBeneficiario[]> {
+  const { data } = await api.get("/relatorios/localidades/")
+  return data as LocalidadeBeneficiario[]
+}
+
+export async function setLocalidadeCoordenada(
+  id: string,
+  latitude: number,
+  longitude: number,
+): Promise<LocalidadeBeneficiario & { enderecos_aplicados: number }> {
+  const { data } = await api.patch(`/relatorios/localidades/${id}/`, { latitude, longitude })
+  return data as LocalidadeBeneficiario & { enderecos_aplicados: number }
+}
+
+export async function aplicarLocalidades(): Promise<{ localidades: number; enderecos: number }> {
+  const { data } = await api.post("/relatorios/localidades/aplicar/", {})
+  return data as { localidades: number; enderecos: number }
+}
+
 export async function definirCoordenadaManual(
   cidadaoId: string,
   latitude: number,
   longitude: number,
 ): Promise<void> {
   await api.post(`/geocodificacao/enderecos/${cidadaoId}/manual/`, { latitude, longitude })
+}
+
+export async function reverseGeocode(
+  latitude: number,
+  longitude: number,
+): Promise<{ logradouro: string; numero: string; bairro: string; cep: string; formatted: string }> {
+  const { data } = await api.post("/geocodificacao/reverse/", { latitude, longitude })
+  return data
+}
+
+export async function atualizarEnderecoCampos(
+  cidadaoId: string,
+  campos: Record<string, string>,
+): Promise<void> {
+  await api.patch(`/geocodificacao/enderecos/${cidadaoId}/campos/`, campos)
+  invalidateCache("cidadao")
 }
 
 let warmupStarted = false
