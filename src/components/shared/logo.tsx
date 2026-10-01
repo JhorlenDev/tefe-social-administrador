@@ -13,7 +13,10 @@ interface LogoProps {
 export default function Logo({ className, priority }: LogoProps) {
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => setMounted(true))
+    return () => window.cancelAnimationFrame(frameId)
+  }, [])
   // Antes de montar (SSR + 1º render do cliente) usa sempre o logo escuro,
   // evitando mismatch de hidratação. A troca para o claro ocorre após montar.
   const isDark = mounted && resolvedTheme === "dark"

@@ -12,6 +12,7 @@ import {
   BadgeCheck,
   FileText,
   MapPinned,
+  Map,
   LogOut,
 } from "lucide-react"
 import { signOut } from "next-auth/react"
@@ -21,6 +22,7 @@ const links = [
   { href: "/cidadaos", label: "Cidadãos", icon: Users },
   { href: "/beneficios", label: "Benefícios", icon: Gift },
   { href: "/beneficiarios", label: "Beneficiários", icon: BadgeCheck },
+  { href: "/localidades", label: "Localidades", icon: Map },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/mapa-de-calor", label: "Mapa de Calor", icon: MapPinned },
 ]

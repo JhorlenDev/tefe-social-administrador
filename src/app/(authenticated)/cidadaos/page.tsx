@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { ColumnDef } from "@tanstack/react-table"
 import DataTable from "@/components/shared/data-table"
@@ -13,15 +13,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { fetchCidadaos, deleteCidadao, hasCachedData } from "@/lib/api"
+import { fetchCidadaos, deleteCidadao, getCachedData, hasCachedData } from "@/lib/api"
+import { useNavigationFeedback } from "@/components/shared/navigation-feedback"
 import { formatDateBR, formatPhone } from "@/lib/formatters"
 import type { Cidadao, PaginatedResponse } from "@/types"
 import { format } from "date-fns"
 import { MoreHorizontal, Eye, Trash2, Download } from "lucide-react"
 import { toast } from "sonner"
-import * as XLSX from "xlsx"
-import { jsPDF } from "jspdf"
-import autoTable from "jspdf-autotable"
 
 const statusBadge = (status: string) => {
   const map: Record<string, string> = {
@@ -34,16 +32,20 @@ const statusBadge = (status: string) => {
 
 export default function CidadaosPage() {
   const router = useRouter()
-  const [data, setData] = useState<PaginatedResponse<Cidadao> | null>(null)
+  const { startNavigation } = useNavigationFeedback()
+  const [data, setData] = useState<PaginatedResponse<Cidadao> | null>(() =>
+    getCachedData("cidadaos", { page: "1", page_size: "20" }),
+  )
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(() => !hasCachedData("cidadaos", { page: "1", page_size: "20" }))
   const [search, setSearch] = useState("")
+  const deferredSearch = useDeferredValue(search)
   const [statusFilter, setStatusFilter] = useState("todos")
   const [exporting, setExporting] = useState(false)
 
   const load = useCallback(async () => {
     const params: Record<string, string> = { page: String(page), page_size: "20" }
-    if (search.trim()) params.search = search.trim()
+    if (deferredSearch.trim()) params.search = deferredSearch.trim()
     if (statusFilter !== "todos") params.status_atualizacao = statusFilter
 
     if (!hasCachedData("cidadaos", params)) {
@@ -58,14 +60,11 @@ export default function CidadaosPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, search, statusFilter])
+  }, [deferredSearch, page, statusFilter])
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      void load()
-    }, 250)
-
-    return () => window.clearTimeout(timeoutId)
+    const frameId = window.requestAnimationFrame(() => void load())
+    return () => window.cancelAnimationFrame(frameId)
   }, [load])
 
   const handleDelete = async (id: string, nome: string) => {
@@ -83,6 +82,7 @@ export default function CidadaosPage() {
     setExporting(true)
     try {
       const all = await fetchCidadaos({ page_size: "10000" })
+      const XLSX = await import("xlsx")
       const rows = all.results.map((c) => ({
         Nome: c.nome,
         NIS: c.nis || "",
@@ -105,6 +105,7 @@ export default function CidadaosPage() {
     setExporting(true)
     try {
       const all = await fetchCidadaos({ page_size: "500" })
+      const [{ jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")])
       const doc = new jsPDF()
       doc.text("Relatório de Cidadãos", 14, 15)
       const rows = all.results.map((c) => [c.nome, c.nis || "", c.email || "", c.status_atualizacao])
@@ -121,7 +122,13 @@ export default function CidadaosPage() {
 
   const columns: ColumnDef<Cidadao>[] = [
     { accessorKey: "nome", header: "Nome", cell: ({ row }) => (
-      <button className="font-medium text-primary hover:underline text-left" onClick={() => router.push(`/cidadaos/${row.original.id}`)}>
+      <button
+        className="font-medium text-primary hover:underline text-left"
+        onClick={() => {
+          startNavigation()
+          router.push(`/cidadaos/${row.original.id}`)
+        }}
+      >
         {row.original.nome}
       </button>
     )},
@@ -136,7 +143,10 @@ export default function CidadaosPage() {
           <MoreHorizontal className="w-4 h-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => router.push(`/cidadaos/${row.original.id}`)}>
+          <DropdownMenuItem onClick={() => {
+            startNavigation()
+            router.push(`/cidadaos/${row.original.id}`)
+          }}>
             <Eye className="w-4 h-4 mr-2" /> Visualizar
           </DropdownMenuItem>
           <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(row.original.id, row.original.nome)}>
@@ -192,6 +202,8 @@ export default function CidadaosPage() {
           </Select>
         }
         loading={loading}
+        manualPagination
+        totalRecords={data?.count}
       />
 
       <div className="flex items-center justify-center gap-2">

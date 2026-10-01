@@ -18,9 +18,11 @@ import { format } from "date-fns"
 import { MoreHorizontal, Plus, Pencil, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { BeneficioIcon, getBeneficioIconOption } from "@/lib/beneficio-icons"
+import { useNavigationFeedback } from "@/components/shared/navigation-feedback"
 
 export default function BeneficiosPage() {
   const router = useRouter()
+  const { startNavigation } = useNavigationFeedback()
   const [data, setData] = useState<PaginatedResponse<Beneficio> | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(() => !hasCachedData("beneficios", { page: "1" }))
@@ -38,7 +40,10 @@ export default function BeneficiosPage() {
     finally { setLoading(false) }
   }, [page])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => void load())
+    return () => window.cancelAnimationFrame(frameId)
+  }, [load])
 
   const handleDelete = async (id: string, nome: string) => {
     if (!confirm(`Tem certeza que deseja excluir o benefício "${nome}"?`)) return
@@ -51,7 +56,7 @@ export default function BeneficiosPage() {
 
   const columns: ColumnDef<Beneficio>[] = [
     { accessorKey: "nome", header: "Nome", cell: ({ row }) => (
-      <button className="flex items-center gap-2 text-left font-medium text-primary hover:underline" onClick={() => router.push(`/beneficios/${row.original.id}`)}>
+      <button className="flex items-center gap-2 text-left font-medium text-primary hover:underline" onClick={() => { startNavigation(); router.push(`/beneficios/${row.original.id}`) }}>
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
           <BeneficioIcon value={row.original.icone} className="h-4 w-4" />
         </span>
@@ -72,7 +77,7 @@ export default function BeneficiosPage() {
           <MoreHorizontal className="w-4 h-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => router.push(`/beneficios/${row.original.id}`)}>
+          <DropdownMenuItem onClick={() => { startNavigation(); router.push(`/beneficios/${row.original.id}`) }}>
             <Pencil className="w-4 h-4 mr-2" /> Editar
           </DropdownMenuItem>
           <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(row.original.id, row.original.nome)}>
@@ -87,7 +92,7 @@ export default function BeneficiosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Benefícios</h1>
-        <Button onClick={() => router.push("/beneficios/novo")}>
+        <Button onClick={() => { startNavigation(); router.push("/beneficios/novo") }}>
           <Plus className="w-4 h-4 mr-2" /> Novo Benefício
         </Button>
       </div>

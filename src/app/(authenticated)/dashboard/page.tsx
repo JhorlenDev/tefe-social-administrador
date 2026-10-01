@@ -30,6 +30,7 @@ import {
 import type { Beneficio, Cidadao, DashboardStats } from "@/types"
 import { BeneficioIcon } from "@/lib/beneficio-icons"
 import { toast } from "sonner"
+import { useNavigationFeedback } from "@/components/shared/navigation-feedback"
 
 const STATUS_META = {
   ATUALIZADO: { label: "Atualizado", color: "#22c55e" },
@@ -158,6 +159,7 @@ function DashboardSkeleton() {
 
 export default function DashboardPage() {
   const router = useRouter()
+  const { startNavigation } = useNavigationFeedback()
   const [loading, setLoading] = useState(() => !hasCachedKey("dashboard:stats"))
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [beneficios, setBeneficios] = useState<Beneficio[]>([])
@@ -211,20 +213,23 @@ export default function DashboardPage() {
     if (beneficioId === "sem_beneficio") params.sem_beneficio = "true"
     else if (beneficioId !== "todos") params.beneficio_id = beneficioId
 
-    setLoading(true)
-    fetchDashboardStats(params)
-      .then((statsData) => {
-        if (active) setStats(statsData)
-      })
-      .catch(() => {
-        if (active) toast.error("Erro ao carregar dashboard")
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
+    const frameId = window.requestAnimationFrame(() => {
+      setLoading(true)
+      fetchDashboardStats(params)
+        .then((statsData) => {
+          if (active) setStats(statsData)
+        })
+        .catch(() => {
+          if (active) toast.error("Erro ao carregar dashboard")
+        })
+        .finally(() => {
+          if (active) setLoading(false)
+        })
+    })
 
     return () => {
       active = false
+      window.cancelAnimationFrame(frameId)
     }
   }, [beneficioId])
 
@@ -771,7 +776,11 @@ export default function DashboardPage() {
                   <li key={c.id}>
                     <button
                       type="button"
-                      onClick={() => { setModalAberto(false); router.push(`/cidadaos/${c.id}`) }}
+                      onClick={() => {
+                        setModalAberto(false)
+                        startNavigation()
+                        router.push(`/cidadaos/${c.id}`)
+                      }}
                       className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-muted/60"
                     >
                       <span className="text-sm font-medium">{c.nome}</span>

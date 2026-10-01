@@ -10,6 +10,10 @@ import type {
   BeneficiarioPendente,
   GeocodificacaoResultado,
   LocalidadeBeneficiario,
+  LocalidadeCatalogo,
+  MesclarLocalidadeResultado,
+  MesclarRuaResultado,
+  RuaCatalogo,
 } from "@/types"
 
 const proxyUrl = typeof window !== "undefined" ? "/api/proxy" : (process.env.API_UPSTREAM || "http://localhost:8000") + "/api"
@@ -20,12 +24,6 @@ api.interceptors.request.use(async (config) => {
   if (typeof window === "undefined") {
     const { auth } = await import("./auth")
     const session = await auth()
-    if (session?.access_token) {
-      config.headers.Authorization = `Bearer ${session.access_token}`
-    }
-  } else {
-    const { getSession } = await import("next-auth/react")
-    const session = await getSession()
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`
     }
@@ -65,6 +63,11 @@ async function cached<T>(key: string, fn: () => Promise<T>, ttl = DEFAULT_CACHE_
 export function hasCachedData(resource: string, params?: Record<string, string>) {
   const hit = cache.get(makeCacheKey(resource, params))
   return Boolean(hit && Date.now() < hit.expires)
+}
+
+export function getCachedData<T>(resource: string, params?: Record<string, string>): T | null {
+  const hit = cache.get(makeCacheKey(resource, params))
+  return hit && Date.now() < hit.expires ? (hit.data as T) : null
 }
 
 export function hasCachedKey(key: string) {
@@ -162,6 +165,71 @@ export async function updateBeneficiarioStatus(id: string, status: string, valor
   const { data } = await api.patch(`/beneficiarios/${id}/`, { status, valor_recebido })
   invalidateCache("beneficiarios")
   return data as Beneficiario
+}
+
+export async function fetchLocalidadesCatalogo(params?: Record<string, string>): Promise<LocalidadeCatalogo[]> {
+  const cacheKey = makeCacheKey("localidades:catalogo", params)
+  return cached<LocalidadeCatalogo[]>(cacheKey, async () => {
+    const { data } = await api.get("/localidades/", { params })
+    return data as LocalidadeCatalogo[]
+  })
+}
+
+export async function createLocalidadeCatalogo(payload: Partial<LocalidadeCatalogo>): Promise<LocalidadeCatalogo> {
+  const { data } = await api.post("/localidades/", payload)
+  invalidateCache("localidades")
+  return data as LocalidadeCatalogo
+}
+
+export async function updateLocalidadeCatalogo(id: string, payload: Partial<LocalidadeCatalogo>): Promise<LocalidadeCatalogo> {
+  const { data } = await api.patch(`/localidades/${id}/`, payload)
+  invalidateCache("localidades")
+  return data as LocalidadeCatalogo
+}
+
+export async function deleteLocalidadeCatalogo(id: string): Promise<void> {
+  await api.delete(`/localidades/${id}/`)
+  invalidateCache("localidades")
+}
+
+export async function mesclarLocalidadeCatalogo(id: string, destinoId: string): Promise<MesclarLocalidadeResultado> {
+  const { data } = await api.post(`/localidades/${id}/mesclar/`, { destino_id: destinoId })
+  invalidateCache("localidades")
+  invalidateCache("ruas")
+  invalidateCache("cidadaos")
+  return data as MesclarLocalidadeResultado
+}
+
+export async function fetchRuasCatalogo(params?: Record<string, string>): Promise<RuaCatalogo[]> {
+  const cacheKey = makeCacheKey("ruas:catalogo", params)
+  return cached<RuaCatalogo[]>(cacheKey, async () => {
+    const { data } = await api.get("/ruas/", { params })
+    return data as RuaCatalogo[]
+  })
+}
+
+export async function createRuaCatalogo(payload: Partial<RuaCatalogo>): Promise<RuaCatalogo> {
+  const { data } = await api.post("/ruas/", payload)
+  invalidateCache("ruas")
+  return data as RuaCatalogo
+}
+
+export async function updateRuaCatalogo(id: string, payload: Partial<RuaCatalogo>): Promise<RuaCatalogo> {
+  const { data } = await api.patch(`/ruas/${id}/`, payload)
+  invalidateCache("ruas")
+  return data as RuaCatalogo
+}
+
+export async function deleteRuaCatalogo(id: string): Promise<void> {
+  await api.delete(`/ruas/${id}/`)
+  invalidateCache("ruas")
+}
+
+export async function mesclarRuaCatalogo(id: string, destinoId: string): Promise<MesclarRuaResultado> {
+  const { data } = await api.post(`/ruas/${id}/mesclar/`, { destino_id: destinoId })
+  invalidateCache("ruas")
+  invalidateCache("cidadaos")
+  return data as MesclarRuaResultado
 }
 
 export async function fetchAllCidadaos(): Promise<Cidadao[]> {

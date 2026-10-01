@@ -13,6 +13,7 @@ export interface Cidadao {
   estado_civil?: string | null;
   autorizacao_uso_imagem: boolean;
   status_atualizacao: string;
+  atualizado_por_nome?: string | null;
   criado_em: string;
   atualizado_em: string;
   documentos?: Documento | null;
@@ -135,6 +136,44 @@ export interface LocalidadeBeneficiario {
   google_formatted: string;
   google_partial: boolean;
   dentro_de_tefe: boolean;
+}
+
+export type LocalidadeTipo = "BAIRRO" | "COMUNIDADE" | "DISTRITO";
+
+export interface LocalidadeCatalogo {
+  id: string;
+  nome: string;
+  tipo: LocalidadeTipo;
+  criada_automaticamente: boolean;
+  criado_em?: string;
+  atualizado_em?: string;
+}
+
+export interface RuaCatalogo {
+  id: string;
+  nome: string;
+  localidade: string;
+  localidade_id: string;
+  localidade_nome: string;
+  criada_automaticamente: boolean;
+  criado_em?: string;
+  atualizado_em?: string;
+}
+
+export interface MesclarLocalidadeResultado {
+  detail: string;
+  origem: string;
+  destino: LocalidadeCatalogo;
+  enderecos_atualizados: number;
+  ruas_movidas: number;
+  ruas_mescladas: number;
+}
+
+export interface MesclarRuaResultado {
+  detail: string;
+  origem: string;
+  destino: RuaCatalogo;
+  enderecos_atualizados: number;
 }
 
 export interface BeneficiarioPendente {

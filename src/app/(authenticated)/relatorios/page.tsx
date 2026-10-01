@@ -142,6 +142,10 @@ function getStatusAtualizacaoKey(status?: string | null): Exclude<UpdateFilter, 
   return ""
 }
 
+function getResponsavelAtualizacao(cidadao: Cidadao) {
+  return cidadao.atualizado_por_nome?.trim() || ""
+}
+
 function uniqueSorted(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR"))
 }
@@ -161,8 +165,8 @@ function buildGeneralRow(cidadao: Cidadao, vinculos: Beneficiario[]): ReportRow 
     logradouro: cidadao.endereco?.logradouro || "",
     numero_residencia: cidadao.endereco?.numero || "",
     complemento: cidadao.endereco?.complemento || "",
-    responsavel_cadastro: "-",
-    responsavel_atualizacao: "-",
+    responsavel_cadastro: getResponsavelAtualizacao(cidadao),
+    responsavel_atualizacao: getResponsavelAtualizacao(cidadao),
     data_cadastro: formatDate(cidadao.criado_em),
     data_atualizacao: formatDate(cidadao.atualizado_em),
     data_solicitacao: uniqueSorted(vinculos.map((v) => formatDate(v.data_solicitacao))).join(", "),
@@ -376,10 +380,14 @@ export default function RelatoriosPage() {
         if (fmt === "excel") {
           const rows = data.map((c: Cidadao) => ({
             Nome: c.nome,
+            CPF: getCpf(c),
             NIS: c.nis || "",
             Email: c.email || "",
             Telefone: c.telefone || "",
             "Data Nascimento": c.data_nascimento || "",
+            Localidade: getLocalidade(c),
+            Logradouro: c.endereco?.logradouro || "",
+            Número: c.endereco?.numero || "",
             Status: c.status_atualizacao,
             "Criado em": c.criado_em ? format(new Date(c.criado_em), "dd/MM/yyyy") : "",
           }))
@@ -390,9 +398,9 @@ export default function RelatoriosPage() {
         } else {
           const doc = new jsPDF("landscape")
           doc.text("Relatório de Cidadãos", 14, 15)
-          const rows = data.map((c: Cidadao) => [c.nome, c.nis || "", c.email || "", c.telefone || "", c.status_atualizacao])
+          const rows = data.map((c: Cidadao) => [c.nome, getCpf(c), c.nis || "", c.telefone || "", getLocalidade(c), c.status_atualizacao])
           autoTable(doc, {
-            head: [["Nome", "NIS", "Email", "Telefone", "Status"]],
+            head: [["Nome", "CPF", "NIS", "Telefone", "Localidade", "Status"]],
             body: rows,
             startY: 25,
             styles: { fontSize: 8 },
@@ -486,6 +494,15 @@ export default function RelatoriosPage() {
 
   return (
     <div className="space-y-6">
+      {loading && (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-background/60 backdrop-blur-sm">
+          <div className="flex items-center gap-3 rounded-lg border bg-background px-5 py-4 text-sm font-medium shadow-lg">
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            Aguarde...
+          </div>
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-bold">Relatórios</h1>
         <p className="text-sm text-muted-foreground">
@@ -609,8 +626,8 @@ export default function RelatoriosPage() {
 
               <div className="flex flex-wrap gap-2">
                 <Button disabled={loading} onClick={searchReport}>
-                  <Search className="w-4 h-4 mr-2" />
-                  Buscar relatório
+                  {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
+                  {loading ? "Aguarde..." : "Buscar relatório"}
                 </Button>
                 <Button disabled={!appliedFilters || loading || filteredRows.length === 0} onClick={exportFlexibleReport}>
                   <Download className="w-4 h-4 mr-2" />
@@ -631,7 +648,7 @@ export default function RelatoriosPage() {
               </CardTitle>
               <p className="text-sm text-muted-foreground">
                 {loading
-                  ? "Carregando dados..."
+                  ? "Aguarde..."
                   : appliedFilters
                     ? `${filteredRows.length} registro(s) encontrado(s) para os filtros buscados.`
                     : "Escolha os filtros e clique em Buscar relatório."}
@@ -679,6 +696,16 @@ export default function RelatoriosPage() {
                         ))}
                       </tr>
                     ))}
+                    {loading && (
+                      <tr>
+                        <td className="px-3 py-8 text-center text-muted-foreground" colSpan={visibleColumns.length}>
+                          <span className="inline-flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Aguarde...
+                          </span>
+                        </td>
+                      </tr>
+                    )}
                     {!loading && !appliedFilters && (
                       <tr>
                         <td className="px-3 py-8 text-center text-muted-foreground" colSpan={visibleColumns.length}>Nenhuma busca realizada ainda.</td>

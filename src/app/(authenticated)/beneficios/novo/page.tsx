@@ -12,9 +12,11 @@ import { createBeneficio } from "@/lib/api"
 import { BENEFICIO_ICON_DEFAULT, BENEFICIO_ICON_OPTIONS, BeneficioIcon, getBeneficioIconOption } from "@/lib/beneficio-icons"
 import { ArrowLeft, Save } from "lucide-react"
 import { toast } from "sonner"
+import { useNavigationFeedback } from "@/components/shared/navigation-feedback"
 
 export default function NovoBeneficioPage() {
   const router = useRouter()
+  const { startNavigation } = useNavigationFeedback()
   const [nome, setNome] = useState("")
   const [descricao, setDescricao] = useState("")
   const [icone, setIcone] = useState(BENEFICIO_ICON_DEFAULT)
@@ -26,6 +28,7 @@ export default function NovoBeneficioPage() {
     try {
       await createBeneficio({ nome: nome.trim(), descricao: descricao.trim(), icone })
       toast.success("Benefício criado com sucesso")
+      startNavigation()
       router.push("/beneficios")
     } catch { toast.error("Erro ao criar benefício") }
     finally { setSaving(false) }

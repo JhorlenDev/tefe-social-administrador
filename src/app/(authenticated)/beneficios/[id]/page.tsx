@@ -15,10 +15,12 @@ import type { Beneficio } from "@/types"
 import { BENEFICIO_ICON_DEFAULT, BENEFICIO_ICON_OPTIONS, BeneficioIcon, getBeneficioIconOption } from "@/lib/beneficio-icons"
 import { ArrowLeft, Save } from "lucide-react"
 import { toast } from "sonner"
+import { useNavigationFeedback } from "@/components/shared/navigation-feedback"
 
 export default function EditarBeneficioPage() {
   const params = useParams()
   const router = useRouter()
+  const { startNavigation } = useNavigationFeedback()
   const [beneficio, setBeneficio] = useState<Beneficio | null>(null)
   const [loading, setLoading] = useState(true)
   const [nome, setNome] = useState("")
@@ -46,6 +48,7 @@ export default function EditarBeneficioPage() {
     try {
       await updateBeneficio(params.id as string, { nome: nome.trim(), descricao: descricao.trim(), icone, ativo })
       toast.success("Benefício atualizado")
+      startNavigation()
       router.push("/beneficios")
     } catch { toast.error("Erro ao atualizar") }
     finally { setSaving(false) }

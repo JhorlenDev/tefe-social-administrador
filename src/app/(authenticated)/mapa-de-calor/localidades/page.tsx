@@ -59,7 +59,8 @@ export default function LocalidadesPage() {
   }, [])
 
   useEffect(() => {
-    void carregar()
+    const frameId = window.requestAnimationFrame(() => void carregar())
+    return () => window.cancelAnimationFrame(frameId)
   }, [carregar])
 
   const pontos = useMemo(

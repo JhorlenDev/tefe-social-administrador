@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { APIProvider, Map, useMap, useMapsLibrary } from "@vis.gl/react-google-maps"
 import { GoogleMapsOverlay } from "@deck.gl/google-maps"
 import { HeatmapLayer } from "@deck.gl/aggregation-layers"
@@ -33,11 +33,11 @@ const STATUS_ATUALIZACAO_COR: Record<string, string> = {
   DESATUALIZADO: "#ef4444",
 }
 
-// Pino (gota) de mapa branco com furo central, usado como máscara: o deck.gl
-// tinge com a cor do status (getColor). Ancorado na ponta de baixo.
+// Marcador minimalista com centro vazado, usado como máscara: o deck.gl tinge
+// com a cor do status (getColor). Ancorado pela ponta inferior.
 const PIN_SVG =
   `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="64" viewBox="0 0 48 64">` +
-  `<path fill="#fff" fill-rule="evenodd" d="M24 1C12.4 1 3 10.4 3 22c0 14.7 21 41 21 41s21-26.3 21-41C45 10.4 35.6 1 24 1zM24 13a9 9 0 100 18 9 9 0 000-18z"/>` +
+  `<path fill="#fff" fill-rule="evenodd" d="M24 3C13.5 3 5 11.5 5 22c0 14.2 19 37 19 37s19-22.8 19-37C43 11.5 34.5 3 24 3zm0 9a10 10 0 110 20 10 10 0 010-20zm0 6a4 4 0 100 8 4 4 0 000-8z"/>` +
   `</svg>`
 const PIN_URL = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(PIN_SVG)}`
 const PIN_MAPPING = { pin: { x: 0, y: 0, width: 48, height: 64, anchorY: 64, mask: true } }
@@ -79,9 +79,20 @@ function Overlays({ pontos, modo, raio, intensidade, modoManual, onMapClick }: M
   const map = useMap()
   const mapsLib = useMapsLibrary("maps")
   const coreLib = useMapsLibrary("core")
+  const overlayRef = useRef<GoogleMapsOverlay | null>(null)
+  const infoRef = useRef<google.maps.InfoWindow | null>(null)
 
   const pontosValidos = useMemo(
-    () => pontos.filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude)),
+    () =>
+      pontos.filter(
+        (p) =>
+          Number.isFinite(p.latitude) &&
+          Number.isFinite(p.longitude) &&
+          p.latitude >= AMAZONAS_BOUNDS.south &&
+          p.latitude <= AMAZONAS_BOUNDS.north &&
+          p.longitude >= AMAZONAS_BOUNDS.west &&
+          p.longitude <= AMAZONAS_BOUNDS.east,
+      ),
     [pontos],
   )
 
@@ -101,11 +112,41 @@ function Overlays({ pontos, modo, raio, intensidade, modoManual, onMapClick }: M
     map.fitBounds(bounds, 48)
   }, [map, coreLib, pontosValidos, modoManual])
 
-  // Camada deck.gl (GPU) — pontos OU calor. Renderiza no mesmo contexto WebGL
-  // do mapa vector, então acompanha scroll/zoom sem travar o FPS.
+  // Mantém uma única instância da camada GPU. Recriá-la durante alterações de
+  // filtros ou sliders deixa canvases WebGL pendurados e torna o mapa instável.
   useEffect(() => {
-    if (!map || !mapsLib) return
+    if (!map) return
+
+    // Canvas separado deixa os pontos acima de nomes, vias e outros rótulos
+    // do Google Maps, em vez de ocultá-los atrás desses elementos.
+    const overlay = new GoogleMapsOverlay({ interleaved: false, layers: [] })
+    overlay.setMap(map)
+    overlayRef.current = overlay
+
+    return () => {
+      if (overlayRef.current === overlay) overlayRef.current = null
+      try {
+        overlay.setMap(null)
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [map])
+
+  useEffect(() => {
+    if (!mapsLib) return
     const info = new mapsLib.InfoWindow()
+    infoRef.current = info
+
+    return () => {
+      if (infoRef.current === info) infoRef.current = null
+      info.close()
+    }
+  }, [mapsLib])
+
+  useEffect(() => {
+    const overlay = overlayRef.current
+    if (!overlay) return
 
     const layers =
       modo === "pontos"
@@ -118,14 +159,15 @@ function Overlays({ pontos, modo, raio, intensidade, modoManual, onMapClick }: M
               iconMapping: PIN_MAPPING,
               getIcon: () => "pin",
               getColor: (d) => corRgbPorAtualizacao(d.status_atualizacao),
-              getSize: 44,
+              getSize: 34,
               sizeUnits: "pixels",
-              sizeMinPixels: 26,
-              sizeMaxPixels: 56,
+              sizeMinPixels: 24,
+              sizeMaxPixels: 40,
               pickable: true,
               onClick: (pick) => {
                 const p = pick.object as MapaCalorPonto | undefined
-                if (!p) return
+                const info = infoRef.current
+                if (!p || !info || !map) return
                 info.setContent(conteudoInfo(p))
                 info.setPosition({ lat: p.latitude, lng: p.longitude })
                 info.open({ map })
@@ -145,27 +187,12 @@ function Overlays({ pontos, modo, raio, intensidade, modoManual, onMapClick }: M
             }),
           ]
 
-    let overlay: GoogleMapsOverlay | null = null
     try {
-      overlay = new GoogleMapsOverlay({ layers })
-      overlay.setMap(map)
+      overlay.setProps({ layers })
     } catch (err) {
-      console.error("Erro ao montar a camada do mapa:", err)
+      console.error("Erro ao atualizar a camada do mapa:", err)
     }
-
-    // Clicar fora dos pontos fecha o balão.
-    const fecharAoClicarFora = map.addListener("click", () => info.close())
-
-    return () => {
-      fecharAoClicarFora.remove()
-      info.close()
-      try {
-        overlay?.setMap(null)
-      } catch {
-        /* ignore */
-      }
-    }
-  }, [map, mapsLib, pontosValidos, modo, raio, intensidade])
+  }, [map, pontosValidos, modo, raio, intensidade])
 
   // Clique no mapa (modo pino manual).
   useEffect(() => {
