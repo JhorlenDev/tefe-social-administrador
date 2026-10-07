@@ -7,19 +7,86 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { fetchCidadao, definirCoordenadaManual, invalidateCache, reverseGeocode, atualizarEnderecoCampos } from "@/lib/api"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { fetchCidadao, definirCoordenadaManual, invalidateCache, reverseGeocode, atualizarEnderecoCampos, updateCidadao } from "@/lib/api"
 import { formatDateBR, formatPhone } from "@/lib/formatters"
 import type { Cidadao } from "@/types"
-import { ArrowLeft, Mail, MapPin, Calendar, FileText, Users, DollarSign, Crosshair, Loader2, ExternalLink, Wand2 } from "lucide-react"
+import { ArrowLeft, Mail, MapPin, Calendar, FileText, Users, DollarSign, Crosshair, Loader2, ExternalLink, Wand2, Pencil } from "lucide-react"
 import { toast } from "sonner"
 
 type SugestaoEndereco = { logradouro: string; numero: string; bairro: string; cep: string; formatted: string }
+type CidadaoForm = {
+  nome: string
+  cpf: string
+  rg: string
+  rg_orgao: string
+  rg_uf: string
+  nis: string
+  data_nascimento: string
+  telefone: string
+  email: string
+  naturalidade: string
+  ocupacao: string
+  escolaridade: string
+  identidade_genero: string
+  cor: string
+  estado_civil: string
+  possui_deficiencia: boolean
+  autorizacao_uso_imagem: boolean
+  autorizacao_uso_imagem_responsavel: string
+  tipo_localizacao: string
+  logradouro: string
+  numero: string
+  bairro: string
+  distrito: string
+  comunidade_localidade: string
+  cep: string
+  complemento: string
+}
 const CAMPOS_REVERSE: { chave: keyof SugestaoEndereco; label: string }[] = [
   { chave: "logradouro", label: "Logradouro" },
   { chave: "numero", label: "Número" },
   { chave: "bairro", label: "Bairro" },
   { chave: "cep", label: "CEP" },
 ]
+
+function montarFormulario(cidadao: Cidadao): CidadaoForm {
+  return {
+    nome: cidadao.nome || "",
+    cpf: cidadao.documentos?.cpf || "",
+    rg: cidadao.documentos?.rg || "",
+    rg_orgao: cidadao.documentos?.rg_orgao || "",
+    rg_uf: cidadao.documentos?.rg_uf || "",
+    nis: cidadao.nis || "",
+    data_nascimento: cidadao.data_nascimento || "",
+    telefone: cidadao.telefone || "",
+    email: cidadao.email || "",
+    naturalidade: cidadao.naturalidade || "",
+    ocupacao: cidadao.ocupacao || "",
+    escolaridade: cidadao.escolaridade || "",
+    identidade_genero: cidadao.identidade_genero || "",
+    cor: cidadao.cor || "",
+    estado_civil: cidadao.estado_civil || "",
+    possui_deficiencia: !!cidadao.possui_deficiencia,
+    autorizacao_uso_imagem: !!cidadao.autorizacao_uso_imagem,
+    autorizacao_uso_imagem_responsavel: cidadao.autorizacao_uso_imagem_responsavel || "",
+    tipo_localizacao: cidadao.endereco?.tipo_localizacao || "URBANO",
+    logradouro: cidadao.endereco?.logradouro || "",
+    numero: cidadao.endereco?.numero || "",
+    bairro: cidadao.endereco?.bairro || "",
+    distrito: cidadao.endereco?.distrito || "",
+    comunidade_localidade: cidadao.endereco?.comunidade_localidade || "",
+    cep: cidadao.endereco?.cep || "",
+    complemento: cidadao.endereco?.complemento || "",
+  }
+}
+
+function vazioParaNull(valor: string) {
+  const texto = valor.trim()
+  return texto || null
+}
 
 export default function CidadaoDetailPage() {
   const params = useParams()
@@ -33,17 +100,96 @@ export default function CidadaoDetailPage() {
   const [camposSel, setCamposSel] = useState<Record<string, boolean>>({})
   const [buscandoReverse, setBuscandoReverse] = useState(false)
   const [aplicandoEndereco, setAplicandoEndereco] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [salvandoDados, setSalvandoDados] = useState(false)
+  const [form, setForm] = useState<CidadaoForm | null>(null)
 
   useEffect(() => {
     fetchCidadao(params.id as string)
       .then((c) => {
         setCidadao(c)
+        setForm(montarFormulario(c))
         setLatInput(c.endereco?.latitude != null ? String(c.endereco.latitude) : "")
         setLngInput(c.endereco?.longitude != null ? String(c.endereco.longitude) : "")
       })
       .catch(() => setCidadao(null))
       .finally(() => setLoading(false))
   }, [params.id])
+
+  function atualizarForm<K extends keyof CidadaoForm>(campo: K, valor: CidadaoForm[K]) {
+    setForm((atual) => (atual ? { ...atual, [campo]: valor } : atual))
+  }
+
+  async function salvarDadosCidadao() {
+    if (!cidadao || !form) return
+    if (!form.nome.trim()) {
+      toast.error("Informe o nome do cidadão.")
+      return
+    }
+    if (form.tipo_localizacao === "RURAL_DISTRITO") {
+      if (!form.distrito.trim() && !form.comunidade_localidade.trim()) {
+        toast.error("Informe o distrito ou comunidade/localidade.")
+        return
+      }
+    } else if (!form.bairro.trim()) {
+      toast.error("Informe o bairro.")
+      return
+    }
+
+    setSalvandoDados(true)
+    try {
+      const payload: Partial<Cidadao> = {
+        nome: form.nome.trim(),
+        nis: vazioParaNull(form.nis),
+        data_nascimento: vazioParaNull(form.data_nascimento),
+        telefone: vazioParaNull(form.telefone),
+        email: vazioParaNull(form.email),
+        naturalidade: vazioParaNull(form.naturalidade),
+        ocupacao: vazioParaNull(form.ocupacao),
+        escolaridade: vazioParaNull(form.escolaridade),
+        identidade_genero: vazioParaNull(form.identidade_genero),
+        cor: vazioParaNull(form.cor),
+        estado_civil: vazioParaNull(form.estado_civil),
+        possui_deficiencia: form.possui_deficiencia,
+        autorizacao_uso_imagem: form.autorizacao_uso_imagem,
+        autorizacao_uso_imagem_responsavel: vazioParaNull(form.autorizacao_uso_imagem_responsavel),
+        documentos: {
+          id: cidadao.documentos?.id || "",
+          cpf: vazioParaNull(form.cpf),
+          rg: vazioParaNull(form.rg),
+          rg_orgao: vazioParaNull(form.rg_orgao),
+          rg_uf: vazioParaNull(form.rg_uf),
+        },
+        endereco: {
+          id: cidadao.endereco?.id || "",
+          tipo_localizacao: form.tipo_localizacao,
+          logradouro: form.logradouro.trim(),
+          numero: vazioParaNull(form.numero),
+          bairro: form.tipo_localizacao === "RURAL_DISTRITO" ? "" : form.bairro.trim(),
+          distrito: form.tipo_localizacao === "RURAL_DISTRITO" ? vazioParaNull(form.distrito) : null,
+          comunidade_localidade: form.tipo_localizacao === "RURAL_DISTRITO" ? vazioParaNull(form.comunidade_localidade) : null,
+          cep: vazioParaNull(form.cep),
+          complemento: vazioParaNull(form.complemento),
+        },
+      }
+
+      const atualizado = await updateCidadao(cidadao.id, payload)
+      setCidadao(atualizado)
+      setForm(montarFormulario(atualizado))
+      setLatInput(atualizado.endereco?.latitude != null ? String(atualizado.endereco.latitude) : "")
+      setLngInput(atualizado.endereco?.longitude != null ? String(atualizado.endereco.longitude) : "")
+      setEditOpen(false)
+      toast.success("Dados do cidadão atualizados.")
+    } catch (e: unknown) {
+      const err = e as { response?: { status?: number; data?: { detail?: string; errors?: Record<string, unknown> } } }
+      const detail = err?.response?.data?.detail
+      const errors = err?.response?.data?.errors
+      const firstError = errors ? Object.values(errors).flat().join(" ") : ""
+      toast.error(detail || firstError || "Erro ao atualizar os dados do cidadão.")
+    } finally {
+      setSalvandoDados(false)
+    }
+  }
 
   // Detecta um par "lat, lng" colado (formato Google Maps: ponto decimal,
   // vírgula separando). Preenche os dois campos. Retorna true se separou.
@@ -179,10 +325,14 @@ export default function CidadaoDetailPage() {
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold">{cidadao.nome}</h1>
           <Badge className={statusMap[cidadao.status_atualizacao]}>{cidadao.status_atualizacao}</Badge>
         </div>
+        <Button onClick={() => { setForm(montarFormulario(cidadao)); setEditOpen(true) }}>
+          <Pencil className="mr-2 h-4 w-4" />
+          Editar dados
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -373,6 +523,174 @@ export default function CidadaoDetailPage() {
           </Card>
         )}
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Editar dados do cidadão</DialogTitle>
+            <DialogDescription>
+              Altere os dados principais, documentos e endereço. Salvar aqui atualiza direto na API.
+            </DialogDescription>
+          </DialogHeader>
+
+          {form && (
+            <div className="grid gap-6">
+              <div className="grid gap-3">
+                <h3 className="text-sm font-semibold">Dados pessoais</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Label className="grid gap-1.5">
+                    Nome
+                    <Input value={form.nome} onChange={(e) => atualizarForm("nome", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    NIS
+                    <Input value={form.nis} onChange={(e) => atualizarForm("nis", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Data de nascimento
+                    <Input type="date" value={form.data_nascimento} onChange={(e) => atualizarForm("data_nascimento", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Telefone
+                    <Input value={form.telefone} onChange={(e) => atualizarForm("telefone", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Email
+                    <Input type="email" value={form.email} onChange={(e) => atualizarForm("email", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Naturalidade
+                    <Input value={form.naturalidade} onChange={(e) => atualizarForm("naturalidade", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Ocupação
+                    <Input value={form.ocupacao} onChange={(e) => atualizarForm("ocupacao", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Escolaridade
+                    <Input value={form.escolaridade} onChange={(e) => atualizarForm("escolaridade", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Estado civil
+                    <Input value={form.estado_civil} onChange={(e) => atualizarForm("estado_civil", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Sexo/Gênero
+                    <Input value={form.identidade_genero} onChange={(e) => atualizarForm("identidade_genero", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Cor/Raça
+                    <Input value={form.cor} onChange={(e) => atualizarForm("cor", e.target.value)} />
+                  </Label>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Label className="flex items-center justify-between rounded-lg border p-3">
+                    Possui deficiência
+                    <Switch checked={form.possui_deficiencia} onCheckedChange={(checked) => atualizarForm("possui_deficiencia", checked)} />
+                  </Label>
+                  <Label className="flex items-center justify-between rounded-lg border p-3">
+                    Autoriza uso de imagem
+                    <Switch checked={form.autorizacao_uso_imagem} onCheckedChange={(checked) => atualizarForm("autorizacao_uso_imagem", checked)} />
+                  </Label>
+                  <Label className="grid gap-1.5 md:col-span-2">
+                    Responsável pela autorização de imagem
+                    <Input value={form.autorizacao_uso_imagem_responsavel} onChange={(e) => atualizarForm("autorizacao_uso_imagem_responsavel", e.target.value)} />
+                  </Label>
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                <h3 className="text-sm font-semibold">Documentos</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Label className="grid gap-1.5">
+                    CPF
+                    <Input value={form.cpf} onChange={(e) => atualizarForm("cpf", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    RG
+                    <Input value={form.rg} onChange={(e) => atualizarForm("rg", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Órgão do RG
+                    <Input value={form.rg_orgao} onChange={(e) => atualizarForm("rg_orgao", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    UF do RG
+                    <Input maxLength={2} value={form.rg_uf} onChange={(e) => atualizarForm("rg_uf", e.target.value.toUpperCase())} />
+                  </Label>
+                </div>
+              </div>
+
+              <div className="grid gap-3">
+                <h3 className="text-sm font-semibold">Endereço</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Label className="grid gap-1.5">
+                    Tipo de localização
+                    <select
+                      className="h-9 rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      value={form.tipo_localizacao}
+                      onChange={(e) => atualizarForm("tipo_localizacao", e.target.value)}
+                    >
+                      <option value="URBANO">Urbano</option>
+                      <option value="RURAL_DISTRITO">Rural/Distrito</option>
+                    </select>
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Logradouro/Rua
+                    <Input value={form.logradouro} onChange={(e) => atualizarForm("logradouro", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Número
+                    <Input value={form.numero} onChange={(e) => atualizarForm("numero", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Bairro
+                    <Input
+                      value={form.bairro}
+                      onChange={(e) => atualizarForm("bairro", e.target.value)}
+                      disabled={form.tipo_localizacao === "RURAL_DISTRITO"}
+                    />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Distrito
+                    <Input
+                      value={form.distrito}
+                      onChange={(e) => atualizarForm("distrito", e.target.value)}
+                      disabled={form.tipo_localizacao !== "RURAL_DISTRITO"}
+                    />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Comunidade/Localidade
+                    <Input
+                      value={form.comunidade_localidade}
+                      onChange={(e) => atualizarForm("comunidade_localidade", e.target.value)}
+                      disabled={form.tipo_localizacao !== "RURAL_DISTRITO"}
+                    />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    CEP
+                    <Input value={form.cep} onChange={(e) => atualizarForm("cep", e.target.value)} />
+                  </Label>
+                  <Label className="grid gap-1.5">
+                    Complemento
+                    <Input value={form.complemento} onChange={(e) => atualizarForm("complemento", e.target.value)} />
+                  </Label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={salvandoDados}>
+              Cancelar
+            </Button>
+            <Button onClick={salvarDadosCidadao} disabled={salvandoDados}>
+              {salvandoDados ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Salvar alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

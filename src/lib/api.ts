@@ -112,6 +112,14 @@ export async function fetchDashboardStats(params?: Record<string, string>): Prom
   }, 0)
 }
 
+export async function updateCidadao(id: string, payload: Partial<Cidadao>): Promise<Cidadao> {
+  const { data } = await api.patch(`/cidadaos/${id}/`, payload)
+  invalidateCache(`cidadao:${id}`)
+  invalidateCache("cidadaos")
+  invalidateCache("cidadaos:all")
+  return data as Cidadao
+}
+
 export async function deleteCidadao(id: string): Promise<void> {
   await api.delete(`/cidadaos/${id}/`)
   invalidateCache("cidadao")

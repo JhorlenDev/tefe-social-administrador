@@ -6,12 +6,14 @@ export interface Cidadao {
   telefone?: string | null;
   email?: string | null;
   naturalidade?: string | null;
+  ocupacao?: string | null;
   escolaridade?: string | null;
   identidade_genero?: string | null;
   cor?: string | null;
   possui_deficiencia: boolean;
   estado_civil?: string | null;
   autorizacao_uso_imagem: boolean;
+  autorizacao_uso_imagem_responsavel?: string | null;
   status_atualizacao: string;
   atualizado_por_nome?: string | null;
   criado_em: string;
