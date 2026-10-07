@@ -126,18 +126,13 @@ export default function CidadaoDetailPage() {
       toast.error("Informe o nome do cidadão.")
       return
     }
-    if (form.tipo_localizacao === "RURAL_DISTRITO") {
-      if (!form.distrito.trim() && !form.comunidade_localidade.trim()) {
-        toast.error("Informe o distrito ou comunidade/localidade.")
-        return
-      }
-    } else if (!form.bairro.trim()) {
-      toast.error("Informe o bairro.")
-      return
-    }
-
     setSalvandoDados(true)
     try {
+      const enderecoTemLocalidade =
+        form.tipo_localizacao === "RURAL_DISTRITO"
+          ? Boolean(form.distrito.trim() || form.comunidade_localidade.trim())
+          : Boolean(form.bairro.trim())
+      const enderecoPodeSalvar = Boolean(form.logradouro.trim() && enderecoTemLocalidade)
       const payload: Partial<Cidadao> = {
         nome: form.nome.trim(),
         nis: vazioParaNull(form.nis),
@@ -145,7 +140,7 @@ export default function CidadaoDetailPage() {
         telefone: vazioParaNull(form.telefone),
         email: vazioParaNull(form.email),
         naturalidade: vazioParaNull(form.naturalidade),
-        ocupacao: vazioParaNull(form.ocupacao),
+        ocupacao: form.ocupacao.trim(),
         escolaridade: vazioParaNull(form.escolaridade),
         identidade_genero: vazioParaNull(form.identidade_genero),
         cor: vazioParaNull(form.cor),
@@ -160,7 +155,9 @@ export default function CidadaoDetailPage() {
           rg_orgao: vazioParaNull(form.rg_orgao),
           rg_uf: vazioParaNull(form.rg_uf),
         },
-        endereco: {
+      }
+      if (enderecoPodeSalvar) {
+        payload.endereco = {
           id: cidadao.endereco?.id || "",
           tipo_localizacao: form.tipo_localizacao,
           logradouro: form.logradouro.trim(),
@@ -170,7 +167,7 @@ export default function CidadaoDetailPage() {
           comunidade_localidade: form.tipo_localizacao === "RURAL_DISTRITO" ? vazioParaNull(form.comunidade_localidade) : null,
           cep: vazioParaNull(form.cep),
           complemento: vazioParaNull(form.complemento),
-        },
+        }
       }
 
       const atualizado = await updateCidadao(cidadao.id, payload)
@@ -179,7 +176,11 @@ export default function CidadaoDetailPage() {
       setLatInput(atualizado.endereco?.latitude != null ? String(atualizado.endereco.latitude) : "")
       setLngInput(atualizado.endereco?.longitude != null ? String(atualizado.endereco.longitude) : "")
       setEditOpen(false)
-      toast.success("Dados do cidadão atualizados.")
+      toast.success(
+        enderecoPodeSalvar
+          ? "Dados do cidadão atualizados."
+          : "Dados atualizados. O endereço foi mantido porque está incompleto.",
+      )
     } catch (e: unknown) {
       const err = e as { response?: { status?: number; data?: { detail?: string; errors?: Record<string, unknown> } } }
       const detail = err?.response?.data?.detail

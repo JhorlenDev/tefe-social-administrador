@@ -3,15 +3,10 @@
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { ChevronLeft, ChevronRight, Moon, Sun } from "lucide-react"
+import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 
-interface HeaderProps {
-  collapsed: boolean
-  onToggleSidebar: () => void
-}
-
-export default function Header({ collapsed, onToggleSidebar }: HeaderProps) {
+export default function Header() {
   const { data: session } = useSession()
   const { theme, setTheme } = useTheme()
   const initials = session?.user?.name
@@ -19,11 +14,7 @@ export default function Header({ collapsed, onToggleSidebar }: HeaderProps) {
     : "AD"
 
   return (
-    <header className="h-16 border-b flex items-center justify-between px-4 lg:px-6 bg-background">
-      <Button variant="ghost" size="icon" onClick={onToggleSidebar}>
-        {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-      </Button>
-
+    <header className="h-16 border-b border-border/80 flex items-center justify-between px-4 lg:px-6 bg-background/80 backdrop-blur-xl">
       <div className="flex-1" />
 
       <div className="flex items-center gap-3">
@@ -33,7 +24,7 @@ export default function Header({ collapsed, onToggleSidebar }: HeaderProps) {
         </Button>
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground hidden sm:block">
+          <span className="text-sm font-semibold text-foreground hidden sm:block">
             {session?.user?.name || "Admin"}
           </span>
           <Avatar className="w-8 h-8">
